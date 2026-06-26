@@ -1,7 +1,5 @@
 {
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
     "validate": "node --check app.js && node --check server.js"
   },
   "dependencies": {},
