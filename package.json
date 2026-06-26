@@ -1,11 +1,28 @@
 {
+  "name": "aura-app",
+  "version": "0.2.0",
+  "description": "AURA — AI Personal Style Operating System (v0.2 production foundation).",
+  "private": true,
   "scripts": {
-    "validate": "node --check app.js && node --check server.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "validate": "npm run lint && npm run typecheck && npm run build"
   },
-  "dependencies": {},
-  "devDependencies": {},
-  "name": "aura-app-v0-1",
-  "version": "0.1.0",
-  "description": "Runnable AURA MVP prototype: AI Personal Style Operating System.",
-  "private": true
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "next": "^15.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^9",
+    "eslint-config-next": "^15.3.0",
+    "typescript": "^5"
+  }
 }
