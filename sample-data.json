@@ -1,0 +1,11 @@
+{
+  "user": {
+    "name": "Gillio",
+    "city": "Dubai",
+    "temperature": 34,
+    "occasion": "Business Meeting",
+    "styleGoal": "Quiet Luxury",
+    "budget": 1000
+  },
+  "note": "The app includes a Load Demo Wardrobe button that creates demo data in localStorage."
+}

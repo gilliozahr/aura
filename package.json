@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "validate": "node --check app.js && node --check server.js"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "name": "aura-app-v0-1",
+  "version": "0.1.0",
+  "description": "Runnable AURA MVP prototype: AI Personal Style Operating System.",
+  "private": true
+}

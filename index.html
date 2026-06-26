@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AURA — Personal Style Intelligence</title>
+  <meta name="description" content="AURA MVP prototype: AI Personal Style Operating System." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <div class="brand-mark">A</div>
+        <div>
+          <strong>AURA</strong>
+          <span>Style Intelligence OS</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="home">Daily Briefing</button>
+        <button class="nav-item" data-view="wardrobe">Wardrobe</button>
+        <button class="nav-item" data-view="inspiration">AI Inspiration</button>
+        <button class="nav-item" data-view="packing">Packing</button>
+        <button class="nav-item" data-view="stylist">Stylist Network</button>
+        <button class="nav-item" data-view="analytics">Analytics</button>
+        <button class="nav-item" data-view="settings">Settings</button>
+      </nav>
+
+      <div class="sidebar-card">
+        <span class="eyebrow">Founder Mode</span>
+        <p>Prototype v0.1 — local-first, deployable anywhere.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Welcome back, Founder</p>
+          <h1 id="pageTitle">Daily Briefing</h1>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" id="seedBtn">Load Demo Wardrobe</button>
+          <button class="danger" id="resetBtn">Reset</button>
+        </div>
+      </header>
+
+      <section id="view-home" class="view active"></section>
+      <section id="view-wardrobe" class="view"></section>
+      <section id="view-inspiration" class="view"></section>
+      <section id="view-packing" class="view"></section>
+      <section id="view-stylist" class="view"></section>
+      <section id="view-analytics" class="view"></section>
+      <section id="view-settings" class="view"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

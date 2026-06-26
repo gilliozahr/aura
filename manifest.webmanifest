@@ -1,0 +1,10 @@
+{
+  "name": "AURA",
+  "short_name": "AURA",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f7f4ef",
+  "theme_color": "#8b6f47",
+  "description": "AI Personal Style Operating System prototype.",
+  "icons": []
+}
