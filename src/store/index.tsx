@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { AppState, FeedbackEvent, InspirationItem, Order, StylistBooking, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
+import { useToast } from './toast';
 import { LocalRepository, SupabaseRepository } from '@/lib/repository';
 import type { IRepository } from '@/lib/repository';
 
@@ -60,30 +61,41 @@ interface AuraContextValue {
 const AuraContext = createContext<AuraContextValue | null>(null);
 
 export function AuraProvider({ children }: { children: React.ReactNode }) {
-  const { user, isSupabaseConfigured } = useAuth();
+  const { user, loading, isSupabaseConfigured } = useAuth();
+  const { toast } = useToast();
   const [state, dispatch] = useReducer(reducer, defaultState());
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Recreate repo when the authenticated user changes (sign in / sign out).
+  // isSupabaseConfigured is a module-level constant so it only changes once.
   const repo: IRepository = useMemo(
     () => (isSupabaseConfigured ? new SupabaseRepository() : new LocalRepository()),
-    // re-create repo when auth state changes so we load the right data
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isSupabaseConfigured, user?.id]
   );
 
-  // Reload state when repo changes (auth sign-in/out)
+  // Wait for auth to fully resolve before loading state.
+  // Without this guard, the first loadState() call races against AuthProvider's
+  // getUser() call. If the first call's getUser() returns null (stale context)
+  // and completes after the second call has already hydrated with real data,
+  // it overwrites the real data with defaultState().
   useEffect(() => {
+    if (loading) return;
     repo.loadState().then(loaded => dispatch({ type: 'HYDRATE', payload: loaded }));
-  }, [repo]);
+  }, [repo, loading]);
 
-  // Targeted persistence: sync each action to repo without re-saving everything.
-  // Errors are logged; the UI shows optimistic state so the user sees instant feedback.
+  // Targeted persistence: each dispatch syncs only the affected record.
+  // Errors are both logged and surfaced as toasts so the user knows a save failed.
   const syncAction = useCallback((action: Action) => {
     const s = stateRef.current;
-    const persist = (p: Promise<void>) => p.catch((err: unknown) => {
-      console.error('[AuraStore] persist failed:', err);
-    });
+    const persist = (p: Promise<void>) =>
+      p.catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[AuraStore] persist failed:', msg);
+        toast(`Save failed: ${msg}`);
+      });
+
     switch (action.type) {
       case 'SET_USER':
         persist(repo.saveUser(action.payload));
@@ -113,7 +125,7 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         persist(repo.reset());
         break;
     }
-  }, [repo]);
+  }, [repo, toast]);
 
   const wrappedDispatch: React.Dispatch<Action> = useCallback((action: Action) => {
     dispatch(action);

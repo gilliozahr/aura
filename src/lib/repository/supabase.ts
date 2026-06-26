@@ -91,6 +91,10 @@ export class SupabaseRepository implements IRepository {
         this.client.from('feedback_events').select('*').eq('user_id', uid),
       ]);
 
+    if (wardrobeRes.error) console.error('[SupabaseRepository] loadState/wardrobe:', wardrobeRes.error.message);
+    if (inspirationsRes.error) console.error('[SupabaseRepository] loadState/inspirations:', inspirationsRes.error.message);
+    if (ordersRes.error) console.error('[SupabaseRepository] loadState/orders:', ordersRes.error.message);
+
     const def = defaultState();
 
     const profileRow = profileRes.data as unknown as UserProfileRow | null;

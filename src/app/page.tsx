@@ -39,12 +39,12 @@ function AuraApp() {
 export default function Page() {
   return (
     <AuthProvider>
-      <AuraProvider>
-        <ToastProvider>
+      <ToastProvider>
+        <AuraProvider>
           <AuraApp />
           <Toast />
-        </ToastProvider>
-      </AuraProvider>
+        </AuraProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }
