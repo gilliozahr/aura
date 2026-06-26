@@ -77,36 +77,40 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
     repo.loadState().then(loaded => dispatch({ type: 'HYDRATE', payload: loaded }));
   }, [repo]);
 
-  // Targeted persistence: sync each action to repo without re-saving everything
+  // Targeted persistence: sync each action to repo without re-saving everything.
+  // Errors are logged; the UI shows optimistic state so the user sees instant feedback.
   const syncAction = useCallback((action: Action) => {
     const s = stateRef.current;
+    const persist = (p: Promise<void>) => p.catch((err: unknown) => {
+      console.error('[AuraStore] persist failed:', err);
+    });
     switch (action.type) {
       case 'SET_USER':
-        void repo.saveUser(action.payload);
+        persist(repo.saveUser(action.payload));
         break;
       case 'ADD_WARDROBE_ITEM':
-        void repo.addWardrobeItem(action.payload);
+        persist(repo.addWardrobeItem(action.payload));
         break;
       case 'SET_WARDROBE':
-        void repo.setWardrobe(action.payload);
+        persist(repo.setWardrobe(action.payload));
         break;
       case 'ADD_INSPIRATION':
-        void repo.addInspiration(action.payload);
+        persist(repo.addInspiration(action.payload));
         break;
       case 'ADD_ORDER':
-        void repo.addOrder(action.payload);
+        persist(repo.addOrder(action.payload));
         break;
       case 'ADD_STYLIST_BOOKING':
-        void repo.addStylistBooking(action.payload);
+        persist(repo.addStylistBooking(action.payload));
         break;
       case 'ADD_FEEDBACK':
-        void repo.addFeedback(action.payload);
+        persist(repo.addFeedback(action.payload));
         break;
       case 'INCREMENT_WEARS':
-        void repo.incrementWears(action.itemIds, s.wardrobe);
+        persist(repo.incrementWears(action.itemIds, s.wardrobe));
         break;
       case 'RESET':
-        void repo.reset();
+        persist(repo.reset());
         break;
     }
   }, [repo]);

@@ -163,10 +163,17 @@ export class SupabaseRepository implements IRepository {
     return { user, wardrobe, inspirations, outfits: [], orders, stylistBookings, feedback };
   }
 
+  private assertNoError(error: { message: string } | null, ctx: string): void {
+    if (error) {
+      console.error(`[SupabaseRepository] ${ctx}:`, error.message);
+      throw new Error(`DB error (${ctx}): ${error.message}`);
+    }
+  }
+
   async saveUser(user: UserProfile): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('user_profiles').upsert({
+    const { error } = await this.client.from('user_profiles').upsert({
       id: uid,
       name: user.name,
       city: user.city,
@@ -175,12 +182,13 @@ export class SupabaseRepository implements IRepository {
       style_goal: user.styleGoal,
       budget: user.budget,
     });
+    this.assertNoError(error, 'saveUser');
   }
 
   async addWardrobeItem(item: WardrobeItem): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('wardrobe_items').insert({
+    const { error } = await this.client.from('wardrobe_items').insert({
       id: item.id,
       user_id: uid,
       name: item.name,
@@ -193,14 +201,16 @@ export class SupabaseRepository implements IRepository {
       confidence: item.confidence,
       image_url: item.image,
     });
+    this.assertNoError(error, 'addWardrobeItem');
   }
 
   async setWardrobe(items: WardrobeItem[]): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('wardrobe_items').delete().eq('user_id', uid);
+    const { error: delErr } = await this.client.from('wardrobe_items').delete().eq('user_id', uid);
+    this.assertNoError(delErr, 'setWardrobe/delete');
     if (items.length === 0) return;
-    await this.client.from('wardrobe_items').insert(
+    const { error: insErr } = await this.client.from('wardrobe_items').insert(
       items.map(item => ({
         id: item.id,
         user_id: uid,
@@ -215,12 +225,13 @@ export class SupabaseRepository implements IRepository {
         image_url: item.image,
       }))
     );
+    this.assertNoError(insErr, 'setWardrobe/insert');
   }
 
   async addInspiration(item: InspirationItem): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('inspiration_items').insert({
+    const { error } = await this.client.from('inspiration_items').insert({
       id: item.id,
       user_id: uid,
       name: item.name,
@@ -231,46 +242,50 @@ export class SupabaseRepository implements IRepository {
       image_url: item.image,
       report: item.report,
     });
+    this.assertNoError(error, 'addInspiration');
   }
 
   async addOrder(order: Order): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('orders').insert({
+    const { error } = await this.client.from('orders').insert({
       id: order.id,
       user_id: uid,
       item_name: order.itemName,
       price: order.price,
       status: order.status,
     });
+    this.assertNoError(error, 'addOrder');
   }
 
   async addStylistBooking(booking: StylistBooking): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('stylist_bookings').insert({
+    const { error } = await this.client.from('stylist_bookings').insert({
       id: booking.id,
       user_id: uid,
       stylist: booking.stylist,
       status: booking.status,
     });
+    this.assertNoError(error, 'addStylistBooking');
   }
 
   async addFeedback(event: FeedbackEvent): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await this.client.from('feedback_events').insert({
+    const { error } = await this.client.from('feedback_events').insert({
       id: event.id,
       user_id: uid,
       type: event.type,
       score: event.score,
     });
+    this.assertNoError(error, 'addFeedback');
   }
 
   async incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    await Promise.all(
+    const results = await Promise.all(
       currentWardrobe
         .filter(item => itemIds.includes(item.id))
         .map(item =>
@@ -281,6 +296,9 @@ export class SupabaseRepository implements IRepository {
             .eq('user_id', uid)
         )
     );
+    for (const { error } of results) {
+      this.assertNoError(error, 'incrementWears');
+    }
   }
 
   async reset(): Promise<void> {
