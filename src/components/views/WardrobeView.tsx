@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import type { FormEvent } from 'react';
+import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid, fileToDataURL } from '@/lib/utils';
@@ -10,9 +11,13 @@ import type { WardrobeItem } from '@/lib/types';
 function ItemCard({ item }: { item: WardrobeItem }) {
   return (
     <article className="item-card">
-      {item.image
-        ? <img src={item.image} alt={item.name} />
-        : <div className="image-placeholder">{item.category}</div>}
+      {item.image ? (
+        <div style={{ position: 'relative', height: 160 }}>
+          <Image src={item.image} alt={item.name} fill unoptimized style={{ objectFit: 'cover' }} />
+        </div>
+      ) : (
+        <div className="image-placeholder">{item.category}</div>
+      )}
       <div className="body">
         <h3>{item.name}</h3>
         <div className="meta">{item.color} · {item.category}<br />{item.occasion} · {item.style}</div>

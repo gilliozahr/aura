@@ -16,7 +16,7 @@ export class SupabaseRepository implements IRepository {
     return defaultState();
   }
 
-  async saveState(_state: AppState): Promise<void> {
+  async saveState(_: AppState): Promise<void> {
     // TODO v0.3: upsert into user_profiles table after auth is wired
     console.warn('[SupabaseRepository] saveState not yet implemented');
   }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid, fileToDataURL, scoreClass } from '@/lib/utils';
@@ -51,7 +52,9 @@ function InspirationReport({ item }: { item: InspirationItem }) {
       <p className="eyebrow">Compatibility Report</p>
       <h2>{item.name}</h2>
       {item.image && (
-        <img src={item.image} alt={item.name} style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 20, marginBottom: 14 }} />
+        <div style={{ position: 'relative', height: 260, borderRadius: 20, overflow: 'hidden', marginBottom: 14 }}>
+          <Image src={item.image} alt={item.name} fill unoptimized style={{ objectFit: 'cover' }} />
+        </div>
       )}
       <div className={`score ${sc}`}>{item.report.score}%</div>
       <h3>Decision: {item.report.decision}</h3>
