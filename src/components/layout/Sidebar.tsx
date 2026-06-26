@@ -1,6 +1,7 @@
 'use client';
 
 import type { View } from '@/lib/types';
+import AuthSection from '@/components/auth/AuthSection';
 
 const NAV_ITEMS: { id: View; label: string }[] = [
   { id: 'home', label: 'Daily Briefing' },
@@ -40,10 +41,7 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="sidebar-card">
-        <span className="eyebrow">v0.2 Foundation</span>
-        <p>Next.js · TypeScript · Supabase-ready · Agent OS</p>
-      </div>
+      <AuthSection />
     </aside>
   );
 }

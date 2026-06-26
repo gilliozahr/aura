@@ -5,7 +5,7 @@ import type { FormEvent } from 'react';
 import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import { uid, fileToDataURL } from '@/lib/utils';
+import { uid, fileToDataURL, isDataUrl } from '@/lib/utils';
 import type { WardrobeItem } from '@/lib/types';
 
 function ItemCard({ item }: { item: WardrobeItem }) {
@@ -13,7 +13,13 @@ function ItemCard({ item }: { item: WardrobeItem }) {
     <article className="item-card">
       {item.image ? (
         <div style={{ position: 'relative', height: 160 }}>
-          <Image src={item.image} alt={item.name} fill unoptimized style={{ objectFit: 'cover' }} />
+          <Image
+            src={item.image}
+            alt={item.name}
+            fill
+            unoptimized={isDataUrl(item.image)}
+            style={{ objectFit: 'cover' }}
+          />
         </div>
       ) : (
         <div className="image-placeholder">{item.category}</div>
@@ -31,7 +37,7 @@ function ItemCard({ item }: { item: WardrobeItem }) {
 }
 
 export default function WardrobeView() {
-  const { state, dispatch } = useAura();
+  const { state, dispatch, uploadImage } = useAura();
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -39,7 +45,14 @@ export default function WardrobeView() {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const imageFile = form.get('image') as File | null;
-    const image = await fileToDataURL(imageFile);
+
+    // Try Supabase Storage first; fall back to base64 data URL
+    let image = '';
+    if (imageFile && imageFile.size > 0) {
+      const uploaded = await uploadImage(imageFile, 'wardrobe-images');
+      image = uploaded ?? await fileToDataURL(imageFile);
+    }
+
     const item: WardrobeItem = {
       id: uid(),
       name: form.get('name') as string,
@@ -53,7 +66,7 @@ export default function WardrobeView() {
       image,
     };
     dispatch({ type: 'ADD_WARDROBE_ITEM', payload: item });
-    toast('Item added. AI tagging simulated locally.');
+    toast('Item added to wardrobe.');
     formRef.current?.reset();
   }
 

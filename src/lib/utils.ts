@@ -16,3 +16,7 @@ export function fileToDataURL(file: File | null): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+export function isDataUrl(url: string): boolean {
+  return url.startsWith('data:');
+}
