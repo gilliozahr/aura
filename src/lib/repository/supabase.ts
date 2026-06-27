@@ -4,6 +4,8 @@ import type {
   InspirationItem,
   InspirationReport,
   Order,
+  OutfitReport,
+  SavedOutfit,
   StylistBooking,
   UserProfile,
   WardrobeItem,
@@ -62,6 +64,14 @@ interface FeedbackRow {
   id: string;
   type: string;
   score: number;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+interface SavedOutfitRow {
+  id: string;
+  outfit_items: WardrobeItem[];
+  report: OutfitReport;
+  feedback: string | null;
   created_at: string;
 }
 
@@ -81,7 +91,7 @@ export class SupabaseRepository implements IRepository {
     const uid = await this.userId();
     if (!uid) return defaultState();
 
-    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes] =
+    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes] =
       await Promise.all([
         this.client.from('user_profiles').select('*').eq('id', uid).single(),
         this.client.from('wardrobe_items').select('*').eq('user_id', uid),
@@ -89,11 +99,13 @@ export class SupabaseRepository implements IRepository {
         this.client.from('orders').select('*').eq('user_id', uid),
         this.client.from('stylist_bookings').select('*').eq('user_id', uid),
         this.client.from('feedback_events').select('*').eq('user_id', uid),
+        this.client.from('saved_outfits').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(20),
       ]);
 
     if (wardrobeRes.error) console.error('[SupabaseRepository] loadState/wardrobe:', wardrobeRes.error.message);
     if (inspirationsRes.error) console.error('[SupabaseRepository] loadState/inspirations:', inspirationsRes.error.message);
     if (ordersRes.error) console.error('[SupabaseRepository] loadState/orders:', ordersRes.error.message);
+    if (outfitsRes.error) console.error('[SupabaseRepository] loadState/outfits:', outfitsRes.error.message);
 
     const def = defaultState();
 
@@ -161,10 +173,21 @@ export class SupabaseRepository implements IRepository {
       id: r.id,
       type: r.type,
       score: r.score,
+      payload: r.payload ?? undefined,
       at: r.created_at,
     }));
 
-    return { user, wardrobe, inspirations, outfits: [], orders, stylistBookings, feedback };
+    const outfits: SavedOutfit[] = (
+      (outfitsRes.data ?? []) as unknown as SavedOutfitRow[]
+    ).map(r => ({
+      id: r.id,
+      outfitItems: r.outfit_items,
+      report: r.report,
+      feedback: (r.feedback as SavedOutfit['feedback']) ?? undefined,
+      createdAt: r.created_at,
+    }));
+
+    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback };
   }
 
   private assertNoError(error: { message: string } | null, ctx: string): void {
@@ -282,8 +305,22 @@ export class SupabaseRepository implements IRepository {
       user_id: uid,
       type: event.type,
       score: event.score,
+      payload: event.payload ?? null,
     });
     this.assertNoError(error, 'addFeedback');
+  }
+
+  async addSavedOutfit(outfit: SavedOutfit): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client.from('saved_outfits').insert({
+      id: outfit.id,
+      user_id: uid,
+      outfit_items: outfit.outfitItems,
+      report: outfit.report,
+      feedback: outfit.feedback ?? null,
+    });
+    this.assertNoError(error, 'addSavedOutfit');
   }
 
   async incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void> {
@@ -314,6 +351,7 @@ export class SupabaseRepository implements IRepository {
       this.client.from('orders').delete().eq('user_id', uid),
       this.client.from('stylist_bookings').delete().eq('user_id', uid),
       this.client.from('feedback_events').delete().eq('user_id', uid),
+      this.client.from('saved_outfits').delete().eq('user_id', uid),
     ]);
   }
 

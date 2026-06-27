@@ -1,6 +1,6 @@
-import type { InspirationReport, WardrobeItem, UserProfile } from '@aura/types';
-import type { AIAdapter, InspirationInput } from '../index';
-import { validateReport } from '../validate';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile } from '@aura/types';
+import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
+import { validateReport, validateOutfitReport } from '../validate';
 import { MockAIAdapter } from './mock';
 
 const MODEL = 'gpt-4o';
@@ -9,7 +9,7 @@ interface OpenAIResponse {
   choices: Array<{ message: { content: string } }>;
 }
 
-function buildPrompt(
+function buildInspirationPrompt(
   item: InspirationInput,
   user: UserProfile,
   wardrobe: WardrobeItem[],
@@ -50,6 +50,44 @@ Return ONLY valid JSON, no markdown:
 {"compatibilityScore":<int>,"styleMatchScore":<int>,"wardrobeImpactScore":<int>,"budgetFitScore":<int>,"duplicateRisk":<int>,"confidence":<int>,"decision":"<BUY|WAIT|SKIP>","reasoningSummary":"<string>","whyItWorks":"<string>","risks":["<string>"],"suggestedOutfits":["<string>"],"betterAlternatives":["<string>"],"missingWardrobeOpportunities":["<string>"]}`;
 }
 
+function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile): string {
+  const itemList = items
+    .map(i => `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`)
+    .join('\n');
+  return `You are AURA, an AI personal style operating system. Analyze this outfit combination.
+
+OUTFIT ITEMS:
+${itemList}
+
+USER CONTEXT:
+- Style goal: "${user.styleGoal}"
+- City: ${user.city}
+- Temperature: ${user.temperature}°C
+- Occasion: "${user.occasion}"
+
+Score all dimensions as integers 0-100:
+- compatibilityScore: overall outfit cohesion and visual harmony
+- occasionFitScore: how well this outfit suits "${user.occasion}"
+- weatherFitScore: appropriateness for ${user.temperature}°C in ${user.city}
+- styleMatchScore: alignment with "${user.styleGoal}" aesthetic
+- colorHarmonyScore: how well the colors work together
+- confidence: your confidence in this analysis
+
+Rules:
+- Never score any dimension at 100 unless evidence is overwhelming
+- compatibilityScore = round(occasionFitScore*0.30 + weatherFitScore*0.20 + styleMatchScore*0.30 + colorHarmonyScore*0.20)
+
+Provide:
+- reasoningSummary: one sentence overall verdict
+- whyItWorks: specific explanation of why these pieces work together (or don't)
+- risks: array of 1-2 specific issues (empty array if none)
+- missingItems: array of 1-2 items that would complete the outfit
+- alternatives: array of 1-2 specific alternative pieces to consider swapping in
+
+Return ONLY valid JSON, no markdown:
+{"compatibilityScore":<int>,"occasionFitScore":<int>,"weatherFitScore":<int>,"styleMatchScore":<int>,"colorHarmonyScore":<int>,"confidence":<int>,"reasoningSummary":"<string>","whyItWorks":"<string>","risks":["<string>"],"missingItems":["<string>"],"alternatives":["<string>"]}`;
+}
+
 export class OpenAIAdapter implements AIAdapter {
   async analyzeInspiration(
     item: InspirationInput,
@@ -78,7 +116,7 @@ export class OpenAIAdapter implements AIAdapter {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [{ role: 'user', content: buildPrompt(item, user, wardrobe, duplicateCount) }],
+          messages: [{ role: 'user', content: buildInspirationPrompt(item, user, wardrobe, duplicateCount) }],
           response_format: { type: 'json_object' },
           max_tokens: 1024,
           temperature: 0.3,
@@ -96,7 +134,7 @@ export class OpenAIAdapter implements AIAdapter {
       const report = validateReport(parsed);
       const latencyMs = Date.now() - t0;
 
-      console.info('[OpenAIAdapter] success', { model: MODEL, latencyMs, decision: report.decision });
+      console.info('[OpenAIAdapter] analyzeInspiration success', { model: MODEL, latencyMs, decision: report.decision });
 
       return {
         ...report,
@@ -104,8 +142,71 @@ export class OpenAIAdapter implements AIAdapter {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[OpenAIAdapter] error — falling back to mock:', msg);
+      console.error('[OpenAIAdapter] analyzeInspiration error — falling back to mock:', msg);
       const report = await new MockAIAdapter().analyzeInspiration(item, context);
+      return {
+        ...report,
+        _meta: {
+          provider: 'openai',
+          mode: 'mock',
+          model: MODEL,
+          latencyMs: Date.now() - t0,
+          fallbackUsed: true,
+        },
+      };
+    }
+  }
+
+  async analyzeOutfit(input: OutfitInput): Promise<OutfitReport> {
+    const t0 = Date.now();
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('[OpenAIAdapter] OPENAI_API_KEY not set — using mock for analyzeOutfit');
+      const report = await new MockAIAdapter().analyzeOutfit(input);
+      return { ...report, _meta: { ...report._meta!, provider: 'openai', fallbackUsed: true } };
+    }
+
+    const { items, user } = input;
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [{ role: 'user', content: buildOutfitPrompt(items, user) }],
+          response_format: { type: 'json_object' },
+          max_tokens: 512,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`OpenAI HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      }
+
+      const data = (await res.json()) as OpenAIResponse;
+      const text = data.choices?.[0]?.message?.content ?? '';
+      const parsed: unknown = JSON.parse(text);
+      const report = validateOutfitReport(parsed);
+      const latencyMs = Date.now() - t0;
+
+      console.info('[OpenAIAdapter] analyzeOutfit success', { model: MODEL, latencyMs, score: report.compatibilityScore });
+
+      return {
+        ...report,
+        outfitItems: items.map(i => i.id),
+        _meta: { provider: 'openai', mode: 'real', model: MODEL, latencyMs, fallbackUsed: false },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[OpenAIAdapter] analyzeOutfit error — falling back to mock:', msg);
+      const report = await new MockAIAdapter().analyzeOutfit(input);
       return {
         ...report,
         _meta: {

@@ -3,6 +3,7 @@ import type {
   FeedbackEvent,
   InspirationItem,
   Order,
+  SavedOutfit,
   StylistBooking,
   UserProfile,
   WardrobeItem,
@@ -17,6 +18,7 @@ export interface IRepository {
   addOrder(order: Order): Promise<void>;
   addStylistBooking(booking: StylistBooking): Promise<void>;
   addFeedback(event: FeedbackEvent): Promise<void>;
+  addSavedOutfit(outfit: SavedOutfit): Promise<void>;
   incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void>;
   reset(): Promise<void>;
   uploadImage(
