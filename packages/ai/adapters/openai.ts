@@ -26,10 +26,17 @@ Score all dimensions as integers 0-100:
 - wardrobeImpactScore: versatility added (penalise for duplicates)
 - budgetFitScore: 100 if price is within monthly budget, lower if over
 - duplicateRisk: redundancy risk (0 = fully unique, 100 = many duplicates)
-- confidence: your confidence in this analysis
+- confidence: your confidence in this analysis (lower when item data is vague or generic)
 
 Compute: compatibilityScore = round(styleMatchScore*0.35 + wardrobeImpactScore*0.35 + budgetFitScore*0.20 + (100-duplicateRisk)*0.10)
 Decision: BUY if compatibilityScore>=82, WAIT if>=62, SKIP otherwise
+
+Scoring rules — follow these strictly:
+- Never score any single dimension at 100 unless the evidence is overwhelming and specific
+- If the item name is generic, unclear, or non-descriptive, set confidence below 55 and recommend WAIT
+- A BUY decision requires: strong named style alignment, a clear wardrobe gap filled, budget within range, and low duplicate risk — all four
+- When in doubt between BUY and WAIT, choose WAIT
+- compatibilityScore above 90 requires exceptional alignment across all four dimensions
 
 Provide specific, item-aware analysis:
 - reasoningSummary: one sentence overall verdict

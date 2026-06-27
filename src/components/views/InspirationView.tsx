@@ -185,9 +185,23 @@ export default function InspirationView() {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
     setAiError('');
+
     const form = new FormData(e.currentTarget);
+    const name = (form.get('name') as string).trim();
+    const price = Number(form.get('price'));
+
+    // Client-side validation — mirrors server validation for instant feedback
+    if ((name.match(/[a-zA-Z]/g) ?? []).length < 2) {
+      setAiError('Item name must contain at least 2 letters. Enter a real item name (e.g. "Navy blazer").');
+      return;
+    }
+    if (!price || price < 1) {
+      setAiError('Please enter the item\'s price (minimum $1) for an accurate analysis.');
+      return;
+    }
+
+    setLoading(true);
     const imageFile = form.get('image') as File | null;
 
     let image = '';
@@ -197,11 +211,11 @@ export default function InspirationView() {
     }
 
     const input = {
-      name: form.get('name') as string,
+      name,
       category: form.get('category') as string,
       color: (form.get('color') as string) || 'Neutral',
       style: (form.get('style') as string) || state.user.styleGoal,
-      price: Number(form.get('price') || 0),
+      price,
     };
 
     try {
@@ -247,7 +261,7 @@ export default function InspirationView() {
           </label>
           <label>Color <input name="color" placeholder="Camel" /></label>
           <label>Style <input name="style" placeholder="Quiet Luxury" /></label>
-          <label>Estimated price <input name="price" type="number" min="0" placeholder="320" /></label>
+          <label>Estimated price <input name="price" type="number" min="1" required placeholder="320" /></label>
           <label>Upload inspiration image <input name="image" type="file" accept="image/*" /></label>
           {aiError && (
             <p style={{ color: '#c0392b', fontSize: 13, background: '#fdf2f2', padding: '8px 12px', borderRadius: 8 }}>

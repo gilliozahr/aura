@@ -24,7 +24,8 @@ function toStrArray(v: unknown): string[] {
 export function validateReport(raw: unknown): InspirationReport {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 
-  const compatibilityScore = clamp(r.compatibilityScore ?? r.score);
+  // Hard cap at 95 — 100 is never warranted without overwhelming real-world evidence
+  const compatibilityScore = Math.min(95, clamp(r.compatibilityScore ?? r.score));
   const styleMatchScore = clamp(r.styleMatchScore ?? r.styleMatch);
   const wardrobeImpactScore = clamp(r.wardrobeImpactScore ?? r.wardrobeImpact);
   const budgetFitScore = clamp(r.budgetFitScore ?? r.budgetFit);
