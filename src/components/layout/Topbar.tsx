@@ -2,6 +2,7 @@
 
 import type { View } from '@/lib/types';
 import { useAura } from '@/store';
+import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
 import { makeDemoItems } from '@/store/default';
 
@@ -16,8 +17,21 @@ const VIEW_TITLES: Record<View, string> = {
 };
 
 export default function Topbar({ activeView }: { activeView: View }) {
-  const { dispatch } = useAura();
+  const { state, dispatch } = useAura();
+  const { user, loading, isSupabaseConfigured } = useAuth();
   const { toast } = useToast();
+
+  const isSignedIn = isSupabaseConfigured ? Boolean(user) : false;
+  const profileName = state.user.name?.trim();
+
+  // Only show a personalised eyebrow once auth has resolved and user is signed in
+  const eyebrow = !isSupabaseConfigured || loading
+    ? 'AURA STYLE INTELLIGENCE'
+    : isSignedIn && profileName
+    ? `Welcome back, ${profileName}`
+    : isSignedIn
+    ? 'Welcome back'
+    : 'AURA STYLE INTELLIGENCE';
 
   function handleSeed() {
     dispatch({ type: 'SET_WARDROBE', payload: makeDemoItems() });
@@ -33,7 +47,7 @@ export default function Topbar({ activeView }: { activeView: View }) {
   return (
     <header className="topbar">
       <div>
-        <p className="eyebrow">Welcome back, Founder</p>
+        <p className="eyebrow">{eyebrow}</p>
         <h1>{VIEW_TITLES[activeView]}</h1>
       </div>
       <div className="top-actions">

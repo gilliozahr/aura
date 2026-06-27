@@ -18,7 +18,7 @@ function makeDemoItems(): WardrobeItem[] {
 export function defaultState(): AppState {
   return {
     user: {
-      name: 'Gillio',
+      name: '',
       city: 'Dubai',
       temperature: 34,
       occasion: 'Business Meeting',

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAura } from '@/store';
+import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
 import { uid, scoreClass } from '@/lib/utils';
 import { recommendationAgent } from '@aura/agents';
@@ -82,7 +83,12 @@ function EditOutfitPanel({
 
 export default function HomeView() {
   const { state, dispatch } = useAura();
+  const { user, loading: authLoading, isSupabaseConfigured } = useAuth();
   const { toast } = useToast();
+
+  const isSignedIn = isSupabaseConfigured ? Boolean(user) : true; // local mode = always "signed in"
+  const profileName = state.user.name?.trim();
+  const greeting = isSignedIn && profileName ? `Good day, ${profileName}.` : isSignedIn ? 'Good day.' : 'Welcome to AURA.';
 
   const [outfitItems, setOutfitItems] = useState<WardrobeItem[]>([]);
   const [report, setReport] = useState<OutfitReport | null>(null);
@@ -95,7 +101,7 @@ export default function HomeView() {
   const hasFetched = useRef(false);
 
   async function fetchOutfit(items?: WardrobeItem[]) {
-    if (state.wardrobe.length === 0) return;
+    if (state.wardrobe.length === 0 || !isSignedIn) return;
     setLoading(true);
     setAiError('');
     setFeedbackGiven(null);
@@ -123,14 +129,15 @@ export default function HomeView() {
     }
   }
 
-  // Fetch once when wardrobe first loads
+  // Fetch once when wardrobe first loads (only when signed in and auth resolved)
   useEffect(() => {
-    if (wardrobeLength > 0 && !hasFetched.current) {
+    if (authLoading) return;
+    if (wardrobeLength > 0 && isSignedIn && !hasFetched.current) {
       hasFetched.current = true;
       fetchOutfit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wardrobeLength]);
+  }, [wardrobeLength, isSignedIn, authLoading]);
 
   function handleAccept() {
     if (!report || outfitItems.length === 0) return;
@@ -202,47 +209,52 @@ export default function HomeView() {
       <div className="hero">
         {/* Left: daily briefing + outfit items */}
         <div className="briefing">
-          <p className="eyebrow">AURA Daily Briefing</p>
-          <h2>Good day, {state.user.name}.</h2>
-          <p>{state.user.city} · {state.user.temperature}°C · {state.user.occasion}</p>
+          <p className="eyebrow">{isSignedIn ? 'AURA Daily Briefing' : 'AURA STYLE INTELLIGENCE'}</p>
+          <h2>{greeting}</h2>
+          {isSignedIn
+            ? <p>{state.user.city || '—'} · {state.user.temperature}°C · {state.user.occasion || '—'}</p>
+            : <p style={{ color: 'var(--muted)', fontSize: 14 }}>Sign in to sync your wardrobe and unlock personalized outfit intelligence.</p>
+          }
 
-          <div className="recommendation">
-            <div>
-              <span className="pill">Style goal: {state.user.styleGoal}</span>
-              {report && (
-                <span className="pill">Outfit score: {report.compatibilityScore}%</span>
+          {isSignedIn && (
+            <div className="recommendation">
+              <div>
+                <span className="pill">Style goal: {state.user.styleGoal || 'Not set'}</span>
+                {report && (
+                  <span className="pill">Outfit score: {report.compatibilityScore}%</span>
+                )}
+              </div>
+
+              {loading && (
+                <p style={{ color: 'var(--muted)', fontSize: 13 }}>Analyzing your wardrobe…</p>
+              )}
+
+              {!loading && outfitItems.length > 0 && (
+                <div>
+                  {outfitItems.map(i => (
+                    <span key={i.id} className="pill">{i.name}</span>
+                  ))}
+                </div>
+              )}
+
+              {!loading && !hasItems && (
+                <span className="pill">Load demo wardrobe or add clothes to get started</span>
+              )}
+
+              {aiError && (
+                <p style={{ color: '#c0392b', fontSize: 12, marginTop: 6 }}>{aiError}</p>
+              )}
+
+              {report && !loading && (
+                <p style={{ fontSize: 13, color: 'var(--muted)', fontStyle: 'italic', marginTop: 6 }}>
+                  {report.reasoningSummary}
+                </p>
               )}
             </div>
-
-            {loading && (
-              <p style={{ color: 'var(--muted)', fontSize: 13 }}>Analyzing your wardrobe…</p>
-            )}
-
-            {!loading && outfitItems.length > 0 && (
-              <div>
-                {outfitItems.map(i => (
-                  <span key={i.id} className="pill">{i.name}</span>
-                ))}
-              </div>
-            )}
-
-            {!loading && !hasItems && (
-              <span className="pill">Load demo wardrobe or add clothes to get started</span>
-            )}
-
-            {aiError && (
-              <p style={{ color: '#c0392b', fontSize: 12, marginTop: 6 }}>{aiError}</p>
-            )}
-
-            {report && !loading && (
-              <p style={{ fontSize: 13, color: 'var(--muted)', fontStyle: 'italic', marginTop: 6 }}>
-                {report.reasoningSummary}
-              </p>
-            )}
-          </div>
+          )}
 
           {/* Edit panel */}
-          {editing && report && (
+          {isSignedIn && editing && report && (
             <EditOutfitPanel
               outfitItems={outfitItems}
               wardrobe={state.wardrobe}
@@ -252,7 +264,7 @@ export default function HomeView() {
           )}
 
           {/* Feedback actions */}
-          {report && !loading && !feedbackGiven && (
+          {isSignedIn && report && !loading && !feedbackGiven && (
             <div className="top-actions" style={{ marginTop: 14 }}>
               <button className="primary" onClick={handleAccept}>Accept Outfit</button>
               <button className="secondary" onClick={() => setEditing(e => !e)}>
@@ -264,7 +276,7 @@ export default function HomeView() {
             </div>
           )}
 
-          {feedbackGiven && (
+          {isSignedIn && feedbackGiven && (
             <div style={{ marginTop: 14 }}>
               <span style={{ fontSize: 13, color: feedbackGiven === 'accepted' ? '#1a9e50' : '#cc8800', fontWeight: 600 }}>
                 {feedbackGiven === 'accepted' ? '✓ Outfit accepted' : '✗ Outfit rejected — refreshing…'}
@@ -281,7 +293,7 @@ export default function HomeView() {
             </div>
           )}
 
-          {hasItems && !loading && (
+          {isSignedIn && hasItems && !loading && (
             <button
               className="secondary"
               style={{ marginTop: 10, fontSize: 12, padding: '4px 12px' }}
@@ -355,6 +367,14 @@ export default function HomeView() {
               <h2>Analyzing…</h2>
               <p style={{ color: 'var(--muted)', fontSize: 13 }}>
                 AURA is selecting the best combination from your wardrobe.
+              </p>
+            </>
+          ) : !isSignedIn ? (
+            <>
+              <p className="eyebrow">AURA STYLE INTELLIGENCE</p>
+              <h2>Sign in to unlock.</h2>
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+                Create an account or sign in to receive AI-powered outfit recommendations, wardrobe analysis, and style scoring.
               </p>
             </>
           ) : (
