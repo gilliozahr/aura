@@ -21,6 +21,7 @@ export default function Topbar({ activeView }: { activeView: View }) {
 
   const profileName = state.user.name?.trim();
   const eyebrow = profileName ? `Welcome back, ${profileName}` : 'AURA STYLE INTELLIGENCE';
+  const showDemoTools = process.env.NEXT_PUBLIC_ENABLE_DEMO_TOOLS === 'true';
 
   function handleSeed() {
     dispatch({ type: 'SET_WARDROBE', payload: makeDemoItems() });
@@ -39,10 +40,12 @@ export default function Topbar({ activeView }: { activeView: View }) {
         <p className="eyebrow">{eyebrow}</p>
         <h1>{VIEW_TITLES[activeView]}</h1>
       </div>
-      <div className="top-actions">
-        <button className="ghost" onClick={handleSeed}>Load Demo Wardrobe</button>
-        <button className="danger" onClick={handleReset}>Reset</button>
-      </div>
+      {showDemoTools && (
+        <div className="top-actions">
+          <button className="ghost" onClick={handleSeed}>Load Demo Wardrobe</button>
+          <button className="danger" onClick={handleReset}>Reset</button>
+        </div>
+      )}
     </header>
   );
 }
