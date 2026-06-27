@@ -1,5 +1,12 @@
 export function uid(): string {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // fallback for environments without crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
 
 export function scoreClass(score: number): 'good' | 'warn' | 'bad' {
@@ -15,4 +22,8 @@ export function fileToDataURL(file: File | null): Promise<string> {
     reader.onload = () => resolve(reader.result as string);
     reader.readAsDataURL(file);
   });
+}
+
+export function isDataUrl(url: string): boolean {
+  return url.startsWith('data:');
 }

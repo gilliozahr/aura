@@ -5,11 +5,11 @@ import type { FormEvent } from 'react';
 import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import { uid, fileToDataURL, scoreClass } from '@/lib/utils';
-import type { InspirationItem } from '@/lib/types';
-import { inspirationAgent, explanationAgent } from '@aura/agents';
+import { uid, fileToDataURL, scoreClass, isDataUrl } from '@/lib/utils';
+import type { InspirationItem, InspirationReport } from '@/lib/types';
+import { explanationAgent } from '@aura/agents';
 
-function InspirationReport({ item }: { item: InspirationItem }) {
+function InspirationReportCard({ item }: { item: InspirationItem }) {
   const { dispatch } = useAura();
   const { toast } = useToast();
   const sc = scoreClass(item.report.score);
@@ -53,7 +53,13 @@ function InspirationReport({ item }: { item: InspirationItem }) {
       <h2>{item.name}</h2>
       {item.image && (
         <div style={{ position: 'relative', height: 260, borderRadius: 20, overflow: 'hidden', marginBottom: 14 }}>
-          <Image src={item.image} alt={item.name} fill unoptimized style={{ objectFit: 'cover' }} />
+          <Image
+            src={item.image}
+            alt={item.name}
+            fill
+            unoptimized={isDataUrl(item.image)}
+            style={{ objectFit: 'cover' }}
+          />
         </div>
       )}
       <div className={`score ${sc}`}>{item.report.score}%</div>
@@ -74,7 +80,7 @@ function InspirationReport({ item }: { item: InspirationItem }) {
 }
 
 export default function InspirationView() {
-  const { state, dispatch } = useAura();
+  const { state, dispatch, uploadImage } = useAura();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -85,7 +91,13 @@ export default function InspirationView() {
     setLoading(true);
     const form = new FormData(e.currentTarget);
     const imageFile = form.get('image') as File | null;
-    const image = await fileToDataURL(imageFile);
+
+    // Try Supabase Storage first; fall back to base64 data URL
+    let image = '';
+    if (imageFile && imageFile.size > 0) {
+      const uploaded = await uploadImage(imageFile, 'inspiration-images');
+      image = uploaded ?? await fileToDataURL(imageFile);
+    }
 
     const input = {
       name: form.get('name') as string,
@@ -96,13 +108,18 @@ export default function InspirationView() {
     };
 
     try {
-      const report = await inspirationAgent.analyze(input, {
-        wardrobe: state.wardrobe,
-        user: state.user,
+      const res = await fetch('/api/ai/analyze-inspiration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item: input, context: { wardrobe: state.wardrobe, user: state.user } }),
       });
+
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = (await res.json()) as { report: InspirationReport };
+
       dispatch({
         type: 'ADD_INSPIRATION',
-        payload: { id: uid(), ...input, image, report, createdAt: new Date().toISOString() },
+        payload: { id: uid(), ...input, image, report: data.report, createdAt: new Date().toISOString() },
       });
       toast('AURA analysis complete.');
     } catch (err) {
@@ -137,7 +154,7 @@ export default function InspirationView() {
 
       <div className="card">
         {lastInspiration
-          ? <InspirationReport item={lastInspiration} />
+          ? <InspirationReportCard item={lastInspiration} />
           : (
             <>
               <p className="eyebrow">Decision Engine</p>

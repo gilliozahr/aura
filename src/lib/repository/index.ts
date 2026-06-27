@@ -1,22 +1,29 @@
-import type { AppState } from '@/lib/types';
-import { LocalRepository } from './local';
-import { SupabaseRepository } from './supabase';
+import type {
+  AppState,
+  FeedbackEvent,
+  InspirationItem,
+  Order,
+  StylistBooking,
+  UserProfile,
+  WardrobeItem,
+} from '@/lib/types';
 
 export interface IRepository {
   loadState(): Promise<AppState>;
-  saveState(state: AppState): Promise<void>;
+  saveUser(user: UserProfile): Promise<void>;
+  addWardrobeItem(item: WardrobeItem): Promise<void>;
+  setWardrobe(items: WardrobeItem[]): Promise<void>;
+  addInspiration(item: InspirationItem): Promise<void>;
+  addOrder(order: Order): Promise<void>;
+  addStylistBooking(booking: StylistBooking): Promise<void>;
+  addFeedback(event: FeedbackEvent): Promise<void>;
+  incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void>;
+  reset(): Promise<void>;
+  uploadImage(
+    file: File,
+    bucket: 'wardrobe-images' | 'inspiration-images'
+  ): Promise<string | null>;
 }
 
-let _instance: IRepository | null = null;
-
-export function getRepository(): IRepository {
-  if (_instance) return _instance;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (url && key) {
-    _instance = new SupabaseRepository(url, key);
-  } else {
-    _instance = new LocalRepository();
-  }
-  return _instance;
-}
+export { LocalRepository } from './local';
+export { SupabaseRepository } from './supabase';

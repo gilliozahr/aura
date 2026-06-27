@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { View } from '@/lib/types';
+import { AuthProvider } from '@/store/auth';
 import { AuraProvider } from '@/store';
 import { ToastProvider } from '@/store/toast';
 import Sidebar from '@/components/layout/Sidebar';
@@ -37,11 +38,13 @@ function AuraApp() {
 
 export default function Page() {
   return (
-    <AuraProvider>
+    <AuthProvider>
       <ToastProvider>
-        <AuraApp />
-        <Toast />
+        <AuraProvider>
+          <AuraApp />
+          <Toast />
+        </AuraProvider>
       </ToastProvider>
-    </AuraProvider>
+    </AuthProvider>
   );
 }

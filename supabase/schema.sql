@@ -100,3 +100,63 @@ create policy "Users own their feedback" on public.feedback_events for all using
 -- Create these in the Supabase dashboard > Storage, or via CLI:
 --   supabase storage create wardrobe-images --public
 --   supabase storage create inspiration-images --public
+--
+-- Then run the policies below in the SQL editor.
+
+-- wardrobe-images
+create policy "Public read wardrobe images"
+  on storage.objects for select
+  using (bucket_id = 'wardrobe-images');
+
+create policy "Auth users upload own wardrobe images"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'wardrobe-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "Auth users update own wardrobe images"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'wardrobe-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "Auth users delete own wardrobe images"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'wardrobe-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- inspiration-images
+create policy "Public read inspiration images"
+  on storage.objects for select
+  using (bucket_id = 'inspiration-images');
+
+create policy "Auth users upload own inspiration images"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'inspiration-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "Auth users update own inspiration images"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'inspiration-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "Auth users delete own inspiration images"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'inspiration-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
