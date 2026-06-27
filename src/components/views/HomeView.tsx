@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import { uid, scoreClass } from '@/lib/utils';
+import { uid, scoreClass, isValidItemName } from '@/lib/utils';
 import { recommendationAgent } from '@aura/agents';
 import type { OutfitReport, SavedOutfit, WardrobeItem } from '@/lib/types';
 
@@ -95,16 +95,17 @@ export default function HomeView() {
   const [feedbackGiven, setFeedbackGiven] = useState<'accepted' | 'rejected' | null>(null);
 
   const wardrobeLength = state.wardrobe.length;
+  const validWardrobe = state.wardrobe.filter(i => isValidItemName(i.name));
   const hasFetched = useRef(false);
 
   async function fetchOutfit(items?: WardrobeItem[]) {
-    if (state.wardrobe.length === 0) return;
+    if (validWardrobe.length < 2) return;
     setLoading(true);
     setAiError('');
     setFeedbackGiven(null);
     setEditing(false);
 
-    const wardrobeToUse = items ?? state.wardrobe;
+    const wardrobeToUse = items ?? validWardrobe;
 
     try {
       const res = await fetch('/api/ai/recommend-outfit', {
@@ -126,14 +127,16 @@ export default function HomeView() {
     }
   }
 
-  // Fetch once when wardrobe first loads
+  const validCount = validWardrobe.length;
+
+  // Fetch once when enough valid items exist
   useEffect(() => {
-    if (wardrobeLength > 0 && !hasFetched.current) {
+    if (validCount >= 2 && !hasFetched.current) {
       hasFetched.current = true;
       fetchOutfit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wardrobeLength]);
+  }, [validCount]);
 
   function handleAccept() {
     if (!report || outfitItems.length === 0) return;
@@ -196,6 +199,7 @@ export default function HomeView() {
   }
 
   const hasItems = wardrobeLength > 0;
+  const hasValidItems = validCount >= 2;
   const avgConf = hasItems
     ? Math.round(state.wardrobe.reduce((s, i) => s + (i.confidence || 75), 0) / wardrobeLength)
     : 0;
@@ -209,7 +213,7 @@ export default function HomeView() {
           <h2>{greeting}</h2>
           <p>{state.user.city || '—'} · {state.user.temperature}°C · {state.user.occasion || '—'}</p>
 
-          {hasItems ? (
+          {hasValidItems ? (
             <div className="recommendation">
               <div>
                 <span className="pill">Style goal: {state.user.styleGoal || 'Not set'}</span>
@@ -243,9 +247,11 @@ export default function HomeView() {
           ) : (
             <div className="recommendation">
               <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 12 }}>
-                Your wardrobe is empty. Add a few items and AURA will recommend real outfits with full intelligence scoring.
+                {hasItems
+                  ? 'Your wardrobe items need valid clothing names before AURA can recommend outfits.'
+                  : 'Your wardrobe is empty. Add a few items and AURA will recommend real outfits with full intelligence scoring.'}
               </p>
-              <span className="pill">No items yet</span>
+              <span className="pill">{hasItems ? `${wardrobeLength} item${wardrobeLength !== 1 ? 's' : ''} · needs valid names` : 'No items yet'}</span>
             </div>
           )}
 
@@ -253,7 +259,7 @@ export default function HomeView() {
           {editing && report && (
             <EditOutfitPanel
               outfitItems={outfitItems}
-              wardrobe={state.wardrobe}
+              wardrobe={validWardrobe}
               onSwap={handleSwap}
               onClose={() => setEditing(false)}
             />
@@ -289,7 +295,7 @@ export default function HomeView() {
             </div>
           )}
 
-          {hasItems && !loading && (
+          {hasValidItems && !loading && (
             <button
               className="secondary"
               style={{ marginTop: 10, fontSize: 12, padding: '4px 12px' }}
@@ -302,12 +308,15 @@ export default function HomeView() {
 
         {/* Right: outfit analysis card */}
         <div className="card">
-          {!hasItems ? (
+          {!hasValidItems ? (
             <>
               <p className="eyebrow">AI Outfit Analysis</p>
-              <h2>Build your wardrobe first.</h2>
+              <h2>Add real wardrobe items first.</h2>
               <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
-                Add a few items to your wardrobe — or load the demo wardrobe — and AURA will recommend real outfits with compatibility scoring, color harmony analysis, and occasion fit.
+                AURA needs a few valid clothing items — like a blazer, shirt, trousers, or shoes — before it can recommend an outfit.
+                {hasItems && wardrobeLength - validCount > 0 && (
+                  <> {wardrobeLength - validCount} item{wardrobeLength - validCount !== 1 ? 's' : ''} in your wardrobe {wardrobeLength - validCount !== 1 ? 'have' : 'has'} unrecognised names.</>
+                )}
               </p>
             </>
           ) : loading ? (

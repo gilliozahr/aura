@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAIAdapter } from '@aura/ai';
 import { recommendationAgent } from '@aura/agents';
+import { isValidItemName } from '@/lib/utils';
 import type { WardrobeItem, UserProfile } from '@aura/types';
 
 interface RequestBody {
@@ -23,8 +24,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Wardrobe is empty.' }, { status: 400 });
     }
 
+    // Strip invalid items before recommendation — server-side safety net
+    const validWardrobe = wardrobe.filter(i => isValidItemName(i.name));
+    if (validWardrobe.length < 2) {
+      return NextResponse.json(
+        { error: 'Not enough valid wardrobe items to generate an outfit recommendation.' },
+        { status: 400 },
+      );
+    }
+
     // Deterministic item selection
-    const selection = recommendationAgent.pickBestOutfit(wardrobe, user);
+    const selection = recommendationAgent.pickBestOutfit(validWardrobe, user);
 
     if (selection.items.length === 0) {
       return NextResponse.json({ error: 'Could not select outfit items from wardrobe.' }, { status: 400 });
@@ -32,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // AI scoring + narrative
     const adapter = createAIAdapter();
-    const report = await adapter.analyzeOutfit({ items: selection.items, user, wardrobe });
+    const report = await adapter.analyzeOutfit({ items: selection.items, user, wardrobe: validWardrobe });
 
     const latencyMs = Date.now() - t0;
     console.info('[recommend-outfit]', {
