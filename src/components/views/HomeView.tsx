@@ -406,46 +406,62 @@ export default function HomeView() {
       </div>
 
       {/* Recent outfit history */}
-      {state.outfits.length > 0 && (
-        <div className="card" style={{ marginTop: 18 }}>
-          <p className="eyebrow">Outfit History</p>
-          <h2>Recent Recommendations</h2>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Items</th>
-                <th>Score</th>
-                <th>Feedback</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.outfits.slice(0, 5).map(o => (
-                <tr key={o.id}>
-                  <td style={{ fontSize: 12 }}>{o.outfitItems.map(i => i.name).join(', ')}</td>
-                  <td>
-                    <span className={`score ${scoreClass(o.report.compatibilityScore)}`} style={{ fontSize: 13 }}>
-                      {o.report.compatibilityScore}%
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: o.feedback === 'accepted' ? '#1a9e50' : o.feedback === 'rejected' ? '#cc3333' : '#888',
-                    }}>
-                      {o.feedback ?? 'pending'}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    {new Date(o.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {(() => {
+        const validOutfits = state.outfits.filter(o =>
+          o.outfitItems.every(i => isValidItemName(i.name))
+        );
+        const hiddenCount = state.outfits.length - validOutfits.length;
+        if (state.outfits.length === 0) return null;
+        return (
+          <div className="card" style={{ marginTop: 18 }}>
+            <p className="eyebrow">Outfit History</p>
+            <h2>Recent Recommendations</h2>
+            {validOutfits.length > 0 ? (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Items</th>
+                    <th>Score</th>
+                    <th>Feedback</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validOutfits.slice(0, 5).map(o => (
+                    <tr key={o.id}>
+                      <td style={{ fontSize: 12 }}>{o.outfitItems.map(i => i.name).join(', ')}</td>
+                      <td>
+                        <span className={`score ${scoreClass(o.report.compatibilityScore)}`} style={{ fontSize: 13 }}>
+                          {o.report.compatibilityScore}%
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: o.feedback === 'accepted' ? '#1a9e50' : o.feedback === 'rejected' ? '#cc3333' : '#888',
+                        }}>
+                          {o.feedback ?? 'pending'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        {new Date(o.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>No valid outfit history yet.</p>
+            )}
+            {hiddenCount > 0 && (
+              <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                {hiddenCount} older recommendation{hiddenCount !== 1 ? 's were' : ' was'} hidden because {hiddenCount !== 1 ? 'they used' : 'it used'} unrecognised item names.
+              </p>
+            )}
+          </div>
+        );
+      })()}
     </>
   );
 }
