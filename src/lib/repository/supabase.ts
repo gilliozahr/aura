@@ -80,16 +80,19 @@ export class SupabaseRepository implements IRepository {
     return createAuraClient();
   }
 
+  private async getAuthUser() {
+    const { data: { user } } = await this.client.auth.getUser();
+    return user;
+  }
+
   private async userId(): Promise<string | null> {
-    const {
-      data: { user },
-    } = await this.client.auth.getUser();
-    return user?.id ?? null;
+    return (await this.getAuthUser())?.id ?? null;
   }
 
   async loadState(): Promise<AppState> {
-    const uid = await this.userId();
-    if (!uid) return defaultState();
+    const authUser = await this.getAuthUser();
+    if (!authUser) return defaultState();
+    const uid = authUser.id;
 
     const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes] =
       await Promise.all([
@@ -109,7 +112,34 @@ export class SupabaseRepository implements IRepository {
 
     const def = defaultState();
 
-    const profileRow = profileRes.data as unknown as UserProfileRow | null;
+    let profileRow = profileRes.data as unknown as UserProfileRow | null;
+
+    // No profile row yet — seed from auth metadata and upsert so next load finds it
+    if (!profileRow) {
+      const meta = authUser.user_metadata as Record<string, unknown> | undefined;
+      const seedName = (
+        (meta?.full_name as string | undefined) ||
+        (meta?.name as string | undefined) ||
+        (meta?.display_name as string | undefined) ||
+        ''
+      ).trim();
+      const seed: UserProfileRow = {
+        id: uid,
+        name: seedName,
+        city: def.user.city,
+        temperature: def.user.temperature,
+        occasion: def.user.occasion,
+        style_goal: def.user.styleGoal,
+        budget: def.user.budget,
+      };
+      const { error: upsertErr } = await this.client.from('user_profiles').upsert(seed);
+      if (upsertErr) {
+        console.error('[SupabaseRepository] loadState/upsert-profile:', upsertErr.message);
+      } else {
+        profileRow = seed;
+      }
+    }
+
     const user: UserProfile = profileRow
       ? {
           name: profileRow.name,
