@@ -1,3 +1,13 @@
+export interface WeatherContext {
+  city: string;
+  temperatureC: number;
+  condition: string;
+  humidity?: number;
+  feelsLikeC?: number;
+  available: boolean;
+  timestamp: string;
+}
+
 export interface UserProfile {
   name: string;
   city: string;

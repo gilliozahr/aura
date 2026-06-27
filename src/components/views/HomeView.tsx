@@ -5,7 +5,7 @@ import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid, scoreClass, isValidItemName } from '@/lib/utils';
 import { recommendationAgent } from '@aura/agents';
-import type { OutfitReport, SavedOutfit, WardrobeItem } from '@/lib/types';
+import type { OutfitReport, SavedOutfit, WardrobeItem, WeatherContext } from '@/lib/types';
 
 // ── Score bar ─────────────────────────────────────────────────────────────────
 
@@ -86,8 +86,17 @@ export default function HomeView() {
 
   const profileName = state.user.name?.trim();
   const firstName = profileName ? profileName.split(/\s+/)[0] : '';
-  const greeting = firstName ? `Good day, ${firstName}.` : 'Good day.';
 
+  function timeGreeting(): string {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return 'Good morning';
+    if (h >= 12 && h < 17) return 'Good afternoon';
+    if (h >= 17 && h < 22) return 'Good evening';
+    return 'Good night';
+  }
+  const greeting = firstName ? `${timeGreeting()}, ${firstName}.` : `${timeGreeting()}.`;
+
+  const [weather, setWeather] = useState<WeatherContext | null>(null);
   const [outfitItems, setOutfitItems] = useState<WardrobeItem[]>([]);
   const [report, setReport] = useState<OutfitReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,6 +107,38 @@ export default function HomeView() {
   const wardrobeLength = state.wardrobe.length;
   const validWardrobe = state.wardrobe.filter(i => isValidItemName(i.name));
   const hasFetched = useRef(false);
+  const weatherFetched = useRef(false);
+
+  // Fetch real weather once on mount
+  useEffect(() => {
+    if (weatherFetched.current) return;
+    weatherFetched.current = true;
+
+    const city = state.user.city || 'Dubai';
+
+    function fetchWeather(lat?: number, lon?: number) {
+      const query = lat != null && lon != null
+        ? `lat=${lat}&lon=${lon}`
+        : `city=${encodeURIComponent(city)}`;
+      fetch(`/api/weather/current?${query}`)
+        .then(r => r.json())
+        .then((w: WeatherContext) => setWeather(w))
+        .catch(() => {
+          setWeather({ city, temperatureC: 0, condition: 'Unavailable', available: false, timestamp: new Date().toISOString() });
+        });
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => fetchWeather(pos.coords.latitude, pos.coords.longitude),
+        () => fetchWeather(), // denied — use saved city
+        { timeout: 5000 }
+      );
+    } else {
+      fetchWeather();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function fetchOutfit(items?: WardrobeItem[]) {
     if (validWardrobe.length < 2) return;
@@ -112,7 +153,7 @@ export default function HomeView() {
       const res = await fetch('/api/ai/recommend-outfit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wardrobe: wardrobeToUse, user: state.user }),
+        body: JSON.stringify({ wardrobe: wardrobeToUse, user: state.user, weather }),
       });
       const data = (await res.json()) as { items?: WardrobeItem[]; report?: OutfitReport; error?: string };
       if (!res.ok || !data.items || !data.report) {
@@ -212,7 +253,17 @@ export default function HomeView() {
         <div className="briefing">
           <p className="eyebrow">AURA Daily Briefing</p>
           <h2>{greeting}</h2>
-          <p>{state.user.city || '—'} · {state.user.temperature}°C · {state.user.occasion || '—'}</p>
+          <p>
+            {weather?.city || state.user.city || '—'}
+            {' · '}
+            {weather == null
+              ? '…'
+              : weather.available
+              ? `${weather.temperatureC}°C · ${weather.condition}`
+              : 'Weather unavailable'}
+            {' · '}
+            {state.user.occasion || '—'}
+          </p>
 
           {hasValidItems ? (
             <div className="recommendation">

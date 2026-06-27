@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
 import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
 import { validateReport, validateOutfitReport } from '../validate';
 import { MockAIAdapter } from './mock';
@@ -50,10 +50,24 @@ Return ONLY valid JSON, no markdown:
 {"compatibilityScore":<int>,"styleMatchScore":<int>,"wardrobeImpactScore":<int>,"budgetFitScore":<int>,"duplicateRisk":<int>,"confidence":<int>,"decision":"<BUY|WAIT|SKIP>","reasoningSummary":"<string>","whyItWorks":"<string>","risks":["<string>"],"suggestedOutfits":["<string>"],"betterAlternatives":["<string>"],"missingWardrobeOpportunities":["<string>"]}`;
 }
 
-function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile): string {
+function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext): string {
   const itemList = items
     .map(i => `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`)
     .join('\n');
+
+  const weatherLine = weather?.available
+    ? `- Weather: ${weather.temperatureC}°C, ${weather.condition}${weather.humidity != null ? `, ${weather.humidity}% humidity` : ''}${weather.feelsLikeC != null ? ` (feels like ${weather.feelsLikeC}°C)` : ''} in ${weather.city}`
+    : `- Weather: unavailable — use neutral weatherFitScore (50-60) and note data is unavailable`;
+
+  const weatherGuidance = weather?.available
+    ? `Weather guidance for weatherFitScore:
+- Above 30°C: prioritize breathable fabrics (linen, cotton), light colors; penalise heavy layers
+- 20–30°C: moderate — most outfits work; reward breathable but not strictly summer pieces
+- Below 15°C: reward layering, knitwear, jackets; penalise exposed/thin items
+- Rain or high humidity (>75%): avoid suede; reward waterproof outerwear, breathable fabrics
+- Current condition "${weather.condition}": apply relevant guidance`
+    : `Weather guidance: data unavailable — set weatherFitScore to 55 and note "Weather data unavailable" in reasoningSummary`;
+
   return `You are AURA, an AI personal style operating system. Analyze this outfit combination.
 
 OUTFIT ITEMS:
@@ -61,14 +75,15 @@ ${itemList}
 
 USER CONTEXT:
 - Style goal: "${user.styleGoal}"
-- City: ${user.city}
-- Temperature: ${user.temperature}°C
 - Occasion: "${user.occasion}"
+${weatherLine}
+
+${weatherGuidance}
 
 Score all dimensions as integers 0-100:
 - compatibilityScore: overall outfit cohesion and visual harmony
 - occasionFitScore: how well this outfit suits "${user.occasion}"
-- weatherFitScore: appropriateness for ${user.temperature}°C in ${user.city}
+- weatherFitScore: appropriateness for current weather conditions
 - styleMatchScore: alignment with "${user.styleGoal}" aesthetic
 - colorHarmonyScore: how well the colors work together
 - confidence: your confidence in this analysis
@@ -78,10 +93,10 @@ Rules:
 - compatibilityScore = round(occasionFitScore*0.30 + weatherFitScore*0.20 + styleMatchScore*0.30 + colorHarmonyScore*0.20)
 
 Provide:
-- reasoningSummary: one sentence overall verdict
+- reasoningSummary: one sentence overall verdict (mention weather if relevant)
 - whyItWorks: specific explanation of why these pieces work together (or don't)
-- risks: array of 1-2 specific issues (empty array if none)
-- missingItems: array of 1-2 items that would complete the outfit
+- risks: array of 1-2 specific issues including weather-related risks (empty array if none)
+- missingItems: array of 1-2 items that would complete the outfit (consider weather)
 - alternatives: array of 1-2 specific alternative pieces to consider swapping in
 
 Return ONLY valid JSON, no markdown:
@@ -167,7 +182,7 @@ export class OpenAIAdapter implements AIAdapter {
       return { ...report, _meta: { ...report._meta!, provider: 'openai', fallbackUsed: true } };
     }
 
-    const { items, user } = input;
+    const { items, user, weather } = input;
 
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -178,7 +193,7 @@ export class OpenAIAdapter implements AIAdapter {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [{ role: 'user', content: buildOutfitPrompt(items, user) }],
+          messages: [{ role: 'user', content: buildOutfitPrompt(items, user, weather) }],
           response_format: { type: 'json_object' },
           max_tokens: 512,
           temperature: 0.3,

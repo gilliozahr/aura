@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAIAdapter } from '@aura/ai';
 import { recommendationAgent } from '@aura/agents';
 import { isValidItemName } from '@/lib/utils';
-import type { WardrobeItem, UserProfile } from '@aura/types';
+import type { WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
 
 interface RequestBody {
   wardrobe: WardrobeItem[];
   user: UserProfile;
+  weather?: WeatherContext;
 }
 
 export async function POST(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as RequestBody;
-    const { wardrobe, user } = body;
+    const { wardrobe, user, weather } = body;
 
     if (!user || !Array.isArray(wardrobe)) {
       return NextResponse.json({ error: 'Missing wardrobe or user context.' }, { status: 400 });
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // AI scoring + narrative
     const adapter = createAIAdapter();
-    const report = await adapter.analyzeOutfit({ items: selection.items, user, wardrobe: validWardrobe });
+    const report = await adapter.analyzeOutfit({ items: selection.items, user, wardrobe: validWardrobe, weather });
 
     const latencyMs = Date.now() - t0;
     console.info('[recommend-outfit]', {

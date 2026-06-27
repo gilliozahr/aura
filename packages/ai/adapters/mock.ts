@@ -94,7 +94,7 @@ export class MockAIAdapter implements AIAdapter {
 
   async analyzeOutfit(input: OutfitInput): Promise<OutfitReport> {
     const t0 = Date.now();
-    const { items, user } = input;
+    const { items, user, weather } = input;
 
     if (items.length === 0) {
       return {
@@ -120,7 +120,10 @@ export class MockAIAdapter implements AIAdapter {
     ).length;
     const occasionFitScore = Math.min(95, Math.round(50 + (occasionMatches / items.length) * 45));
 
-    const temp = user.temperature;
+    // Use real weather if available, otherwise fall back to profile temperature
+    const temp = weather?.available ? weather.temperatureC : user.temperature;
+    const weatherAvailable = weather?.available ?? false;
+    const isRainy = weatherAvailable && /rain|drizzle|storm/i.test(weather?.condition ?? '');
     const weatherMatches = items.filter(i => {
       if (i.season === 'All') return true;
       if (temp >= 28 && i.season === 'Summer') return true;
@@ -128,7 +131,14 @@ export class MockAIAdapter implements AIAdapter {
       if (temp >= 20 && temp < 28 && ['Spring', 'Autumn', 'Fall'].includes(i.season)) return true;
       return false;
     }).length;
-    const weatherFitScore = Math.min(95, Math.round(50 + (weatherMatches / items.length) * 45));
+    const rawWeatherScore = Math.round(50 + (weatherMatches / items.length) * 45);
+    // Rain penalty: suede/leather shoes score lower
+    const suedePenalty = isRainy && items.some(i =>
+      /suede|leather/i.test(i.name) && i.category === 'Shoes'
+    ) ? 10 : 0;
+    const weatherFitScore = weatherAvailable
+      ? Math.min(95, rawWeatherScore - suedePenalty)
+      : 55; // neutral when data unavailable
 
     const goalWord = (user.styleGoal || '').toLowerCase().split(' ')[0];
     const styleMatches = items.filter(i =>

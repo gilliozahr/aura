@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
 
 export interface InspirationInput {
   name: string;
@@ -12,6 +12,7 @@ export interface OutfitInput {
   items: WardrobeItem[];
   user: UserProfile;
   wardrobe: WardrobeItem[];
+  weather?: WeatherContext;
 }
 
 export interface AIAdapter {
