@@ -85,7 +85,8 @@ export default function HomeView() {
   const { toast } = useToast();
 
   const profileName = state.user.name?.trim();
-  const greeting = profileName ? `Good day, ${profileName}.` : 'Good day.';
+  const firstName = profileName ? profileName.split(/\s+/)[0] : '';
+  const greeting = firstName ? `Good day, ${firstName}.` : 'Good day.';
 
   const [outfitItems, setOutfitItems] = useState<WardrobeItem[]>([]);
   const [report, setReport] = useState<OutfitReport | null>(null);
@@ -247,11 +248,9 @@ export default function HomeView() {
           ) : (
             <div className="recommendation">
               <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 12 }}>
-                {hasItems
-                  ? 'Your wardrobe items need valid clothing names before AURA can recommend outfits.'
-                  : 'Your wardrobe is empty. Add a few items and AURA will recommend real outfits with full intelligence scoring.'}
+                Add a few clothing items to your wardrobe and AURA will recommend a complete outfit with full intelligence scoring.
               </p>
-              <span className="pill">{hasItems ? `${wardrobeLength} item${wardrobeLength !== 1 ? 's' : ''} · needs valid names` : 'No items yet'}</span>
+              <span className="pill">Style goal: {state.user.styleGoal || 'Not set'}</span>
             </div>
           )}
 
@@ -311,13 +310,15 @@ export default function HomeView() {
           {!hasValidItems ? (
             <>
               <p className="eyebrow">AI Outfit Analysis</p>
-              <h2>Add real wardrobe items first.</h2>
+              <h2>Build a stronger wardrobe foundation.</h2>
               <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
-                AURA needs a few valid clothing items — like a blazer, shirt, trousers, or shoes — before it can recommend an outfit.
-                {hasItems && wardrobeLength - validCount > 0 && (
-                  <> {wardrobeLength - validCount} item{wardrobeLength - validCount !== 1 ? 's' : ''} in your wardrobe {wardrobeLength - validCount !== 1 ? 'have' : 'has'} unrecognised names.</>
-                )}
+                AURA needs a few clear clothing items — like a blazer, shirt, trousers, or shoes — before it can recommend a complete outfit.
               </p>
+              {hasItems && wardrobeLength - validCount > 0 && (
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                  Some older wardrobe items may need review and can be edited later.
+                </p>
+              )}
             </>
           ) : loading ? (
             <>
