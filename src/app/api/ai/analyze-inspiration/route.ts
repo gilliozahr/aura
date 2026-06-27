@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAIAdapter } from '@aura/ai';
 import type { InspirationInput } from '@aura/ai';
 import type { WardrobeItem, UserProfile } from '@aura/types';
+import { isValidItemName } from '@/lib/utils';
 
 interface RequestBody {
   item: InspirationInput;
@@ -9,11 +10,6 @@ interface RequestBody {
     wardrobe: WardrobeItem[];
     user: UserProfile;
   };
-}
-
-/** Returns true if the string contains at least `min` ASCII letter characters. */
-function hasEnoughLetters(s: string, min = 2): boolean {
-  return (s.match(/[a-zA-Z]/g) ?? []).length >= min;
 }
 
 export async function POST(request: NextRequest) {
@@ -28,9 +24,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing item or context.' }, { status: 400 });
     }
 
-    if (!item.name || !hasEnoughLetters(item.name)) {
+    if (!item.name || !isValidItemName(item.name)) {
       return NextResponse.json(
-        { error: 'Item name must contain at least 2 letters. Please enter a real item name.' },
+        { error: 'Please enter a real item name, like "Camel suede jacket" or "Navy blazer".' },
         { status: 400 }
       );
     }

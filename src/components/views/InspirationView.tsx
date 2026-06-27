@@ -5,7 +5,7 @@ import type { FormEvent } from 'react';
 import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import { uid, fileToDataURL, scoreClass, isDataUrl } from '@/lib/utils';
+import { uid, fileToDataURL, scoreClass, isDataUrl, isValidItemName } from '@/lib/utils';
 import type { InspirationItem, InspirationReport } from '@/lib/types';
 
 // ── Score bar ────────────────────────────────────────────────────────────────
@@ -192,8 +192,8 @@ export default function InspirationView() {
     const price = Number(form.get('price'));
 
     // Client-side validation — mirrors server validation for instant feedback
-    if ((name.match(/[a-zA-Z]/g) ?? []).length < 2) {
-      setAiError('Item name must contain at least 2 letters. Enter a real item name (e.g. "Navy blazer").');
+    if (!isValidItemName(name)) {
+      setAiError('Please enter a real item name, like "Camel suede jacket" or "Navy blazer".');
       return;
     }
     if (!price || price < 1) {
