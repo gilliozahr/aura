@@ -100,8 +100,20 @@ export default function HomeView() {
   const wardrobeLength = state.wardrobe.length;
   const hasFetched = useRef(false);
 
+  // Clear stale recommendation whenever the user signs out
+  useEffect(() => {
+    if (!isSignedIn) {
+      setReport(null);
+      setOutfitItems([]);
+      setAiError('');
+      setEditing(false);
+      setFeedbackGiven(null);
+      hasFetched.current = false;
+    }
+  }, [isSignedIn]);
+
   async function fetchOutfit(items?: WardrobeItem[]) {
-    if (state.wardrobe.length === 0 || !isSignedIn) return;
+    if (!isSignedIn || authLoading || state.wardrobe.length === 0) return;
     setLoading(true);
     setAiError('');
     setFeedbackGiven(null);
@@ -304,9 +316,25 @@ export default function HomeView() {
           )}
         </div>
 
-        {/* Right: outfit analysis card */}
+        {/* Right: outfit analysis card — signed-out check must come first */}
         <div className="card">
-          {report && !loading ? (
+          {!isSignedIn ? (
+            <>
+              <p className="eyebrow">Personal Outfit Intelligence</p>
+              <h2>Sign in to unlock.</h2>
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+                Sign in to analyze your wardrobe and generate real outfit recommendations.
+              </p>
+            </>
+          ) : loading ? (
+            <>
+              <p className="eyebrow">AI Outfit Analysis</p>
+              <h2>Analyzing…</h2>
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+                AURA is selecting the best combination from your wardrobe.
+              </p>
+            </>
+          ) : report ? (
             <>
               <p className="eyebrow">AI Outfit Analysis</p>
               <h2>
@@ -360,22 +388,6 @@ export default function HomeView() {
                   {report._meta.fallbackUsed && ' · mock fallback'}
                 </p>
               )}
-            </>
-          ) : loading ? (
-            <>
-              <p className="eyebrow">AI Outfit Analysis</p>
-              <h2>Analyzing…</h2>
-              <p style={{ color: 'var(--muted)', fontSize: 13 }}>
-                AURA is selecting the best combination from your wardrobe.
-              </p>
-            </>
-          ) : !isSignedIn ? (
-            <>
-              <p className="eyebrow">AURA STYLE INTELLIGENCE</p>
-              <h2>Sign in to unlock.</h2>
-              <p style={{ color: 'var(--muted)', fontSize: 13 }}>
-                Create an account or sign in to receive AI-powered outfit recommendations, wardrobe analysis, and style scoring.
-              </p>
             </>
           ) : (
             <>

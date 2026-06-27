@@ -44,16 +44,21 @@ export default function Topbar({ activeView }: { activeView: View }) {
     toast('AURA reset.');
   }
 
+  // In Supabase mode show tools only when signed in; in local mode always show them
+  const showTools = !isSupabaseConfigured || isSignedIn;
+
   return (
     <header className="topbar">
       <div>
         <p className="eyebrow">{eyebrow}</p>
         <h1>{VIEW_TITLES[activeView]}</h1>
       </div>
-      <div className="top-actions">
-        <button className="ghost" onClick={handleSeed}>Load Demo Wardrobe</button>
-        <button className="danger" onClick={handleReset}>Reset</button>
-      </div>
+      {showTools && (
+        <div className="top-actions">
+          <button className="ghost" onClick={handleSeed}>Load Demo Wardrobe</button>
+          <button className="danger" onClick={handleReset}>Reset</button>
+        </div>
+      )}
     </header>
   );
 }
