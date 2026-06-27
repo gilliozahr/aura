@@ -15,6 +15,7 @@ export interface AIAdapter {
   ): Promise<InspirationReport>;
 }
 
+export { validateReport } from './validate';
 export { MockAIAdapter } from './adapters/mock';
 export { OpenAIAdapter } from './adapters/openai';
 export { AnthropicAdapter } from './adapters/anthropic';

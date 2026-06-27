@@ -20,13 +20,34 @@ export interface WardrobeItem {
   image: string;
 }
 
+export interface ReportDebugMeta {
+  provider: string;
+  mode: 'real' | 'mock';
+  model: string;
+  latencyMs: number;
+  fallbackUsed: boolean;
+}
+
 export interface InspirationReport {
-  duplicateCount: number;
-  styleMatch: number;
-  wardrobeImpact: number;
-  budgetFit: number;
-  score: number;
+  // Core scores 0–100
+  compatibilityScore: number;
+  styleMatchScore: number;
+  wardrobeImpactScore: number;
+  budgetFitScore: number;
+  /** 0 = no duplicates, higher = more redundancy */
+  duplicateRisk: number;
+  /** Model confidence in its own analysis */
+  confidence: number;
   decision: 'BUY' | 'WAIT' | 'SKIP';
+  // Qualitative fields
+  reasoningSummary: string;
+  whyItWorks: string;
+  risks: string[];
+  suggestedOutfits: string[];
+  betterAlternatives: string[];
+  missingWardrobeOpportunities: string[];
+  /** Safe debug metadata — never contains API keys */
+  _meta?: ReportDebugMeta;
 }
 
 export interface InspirationItem {

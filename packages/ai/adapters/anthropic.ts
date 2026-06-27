@@ -1,9 +1,53 @@
 import type { InspirationReport, WardrobeItem, UserProfile } from '@aura/types';
 import type { AIAdapter, InspirationInput } from '../index';
+import { validateReport } from '../validate';
 import { MockAIAdapter } from './mock';
+
+const MODEL = 'claude-sonnet-4-6';
 
 interface AnthropicMessage {
   content: Array<{ type: string; text: string }>;
+}
+
+function buildPrompt(
+  item: InspirationInput,
+  user: UserProfile,
+  wardrobe: WardrobeItem[],
+  duplicateCount: number
+): string {
+  return `You are AURA, an AI personal style operating system. Analyze whether the user should buy this item.
+
+ITEM: "${item.name}" | Category: ${item.category} | Color: ${item.color} | Style: ${item.style} | Price: $${item.price}
+USER: Style goal: "${user.styleGoal}" | Budget: $${user.budget}/month | City: ${user.city} | Occasion: "${user.occasion}"
+WARDROBE: ${wardrobe.length} total items | ${duplicateCount} item(s) with same category and color already owned
+
+Score all dimensions as integers 0-100:
+- styleMatchScore: alignment with the user's style goal and aesthetic
+- wardrobeImpactScore: versatility added (penalise for duplicates)
+- budgetFitScore: 100 if price is within monthly budget, lower if over
+- duplicateRisk: redundancy risk (0 = fully unique, 100 = many duplicates)
+- confidence: your confidence in this analysis (lower when item data is vague or generic)
+
+Compute: compatibilityScore = round(styleMatchScore*0.35 + wardrobeImpactScore*0.35 + budgetFitScore*0.20 + (100-duplicateRisk)*0.10)
+Decision: BUY if compatibilityScore>=82, WAIT if>=62, SKIP otherwise
+
+Scoring rules — follow these strictly:
+- Never score any single dimension at 100 unless the evidence is overwhelming and specific
+- If the item name is generic, unclear, or non-descriptive, set confidence below 55 and recommend WAIT
+- A BUY decision requires: strong named style alignment, a clear wardrobe gap filled, budget within range, and low duplicate risk — all four
+- When in doubt between BUY and WAIT, choose WAIT
+- compatibilityScore above 90 requires exceptional alignment across all four dimensions
+
+Provide specific, item-aware analysis:
+- reasoningSummary: one sentence overall verdict
+- whyItWorks: one sentence on why it fits (or doesn't, for SKIP)
+- risks: array of 1-3 specific risk strings
+- suggestedOutfits: array of 2-3 specific outfit ideas using the existing wardrobe
+- betterAlternatives: array of 1-2 alternative item ideas if WAIT/SKIP, empty array if BUY
+- missingWardrobeOpportunities: array of 1-2 items that would pair well if purchased
+
+Respond with ONLY valid JSON, no markdown, no explanation:
+{"compatibilityScore":<int>,"styleMatchScore":<int>,"wardrobeImpactScore":<int>,"budgetFitScore":<int>,"duplicateRisk":<int>,"confidence":<int>,"decision":"<BUY|WAIT|SKIP>","reasoningSummary":"<string>","whyItWorks":"<string>","risks":["<string>"],"suggestedOutfits":["<string>"],"betterAlternatives":["<string>"],"missingWardrobeOpportunities":["<string>"]}`;
 }
 
 export class AnthropicAdapter implements AIAdapter {
@@ -11,32 +55,19 @@ export class AnthropicAdapter implements AIAdapter {
     item: InspirationInput,
     context: { wardrobe: WardrobeItem[]; user: UserProfile }
   ): Promise<InspirationReport> {
+    const t0 = Date.now();
     const apiKey = process.env.ANTHROPIC_API_KEY;
+
     if (!apiKey) {
-      console.warn('[AnthropicAdapter] ANTHROPIC_API_KEY not set — falling back to mock');
-      return new MockAIAdapter().analyzeInspiration(item, context);
+      console.warn('[AnthropicAdapter] ANTHROPIC_API_KEY not set — using mock');
+      const report = await new MockAIAdapter().analyzeInspiration(item, context);
+      return { ...report, _meta: { ...report._meta!, provider: 'anthropic', fallbackUsed: true } };
     }
 
     const { user, wardrobe } = context;
     const duplicateCount = wardrobe.filter(
-      w =>
-        w.category === item.category &&
-        w.color.toLowerCase() === item.color.toLowerCase()
+      w => w.category === item.category && w.color.toLowerCase() === item.color.toLowerCase()
     ).length;
-
-    const prompt = `You are AURA, an AI personal style operating system. Analyze whether a user should buy this item.
-
-Item: "${item.name}" | Category: ${item.category} | Color: ${item.color} | Style: ${item.style} | Price: $${item.price}
-User: Style goal "${user.styleGoal}" | Budget $${user.budget}/month | City: ${user.city} | Occasion: "${user.occasion}"
-Wardrobe: ${wardrobe.length} items total | ${duplicateCount} similar item(s) already owned (same category + color)
-
-Score each dimension 0-100, then compute:
-  score = round(styleMatch*0.35 + wardrobeImpact*0.35 + budgetFit*0.20 + duplicateScore*0.10)
-  where duplicateScore = ${duplicateCount > 0 ? 50 : 85}
-  decision = BUY if score>=82, WAIT if score>=62, else SKIP
-
-Respond with ONLY valid JSON, no markdown:
-{"styleMatch":<int>,"wardrobeImpact":<int>,"budgetFit":<int>,"duplicateCount":${duplicateCount},"score":<int>,"decision":"<BUY|WAIT|SKIP>"}`;
 
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -47,23 +78,44 @@ Respond with ONLY valid JSON, no markdown:
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 256,
-          messages: [{ role: 'user', content: prompt }],
+          model: MODEL,
+          max_tokens: 1024,
+          temperature: 0.3,
+          messages: [{ role: 'user', content: buildPrompt(item, user, wardrobe, duplicateCount) }],
         }),
       });
 
-      if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Anthropic HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      }
 
       const data = (await res.json()) as AnthropicMessage;
       const text = data.content?.[0]?.text ?? '';
-      const report = JSON.parse(text) as InspirationReport;
+      const parsed: unknown = JSON.parse(text);
+      const report = validateReport(parsed);
+      const latencyMs = Date.now() - t0;
 
-      if (typeof report.score !== 'number') throw new Error('Malformed response');
-      return report;
+      console.info('[AnthropicAdapter] success', { model: MODEL, latencyMs, decision: report.decision });
+
+      return {
+        ...report,
+        _meta: { provider: 'anthropic', mode: 'real', model: MODEL, latencyMs, fallbackUsed: false },
+      };
     } catch (err) {
-      console.error('[AnthropicAdapter] falling back to mock:', err);
-      return new MockAIAdapter().analyzeInspiration(item, context);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[AnthropicAdapter] error — falling back to mock:', msg);
+      const report = await new MockAIAdapter().analyzeInspiration(item, context);
+      return {
+        ...report,
+        _meta: {
+          provider: 'anthropic',
+          mode: 'mock',
+          model: MODEL,
+          latencyMs: Date.now() - t0,
+          fallbackUsed: true,
+        },
+      };
     }
   }
 }
