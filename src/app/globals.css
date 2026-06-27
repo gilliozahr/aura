@@ -256,6 +256,97 @@ textarea { min-height: 92px; resize: vertical; }
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 
+/* ── Loading screen ─────────────────────────────────────────────────────── */
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.loading-brand-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  box-shadow: var(--shadow);
+}
+.loading-text {
+  color: var(--muted);
+  font-size: 15px;
+  letter-spacing: .04em;
+  margin: 0;
+}
+
+/* ── Auth landing ────────────────────────────────────────────────────────── */
+.auth-landing {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.auth-hero {
+  background: linear-gradient(145deg, #1a1410 0%, #2d2218 100%);
+  padding: 56px 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100vh;
+}
+.auth-hero .brand-mark {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+}
+.auth-hero .brand strong { color: #fff; }
+.auth-hero .brand span { color: rgba(255,255,255,.5); }
+.auth-tagline h2 {
+  font-size: 44px;
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+  color: #fff;
+  margin: 48px 0 20px;
+}
+.auth-tagline p {
+  color: rgba(255,255,255,.55);
+  font-size: 15px;
+  line-height: 1.7;
+  max-width: 340px;
+  margin: 0 0 32px;
+}
+.auth-benefits { display: flex; flex-direction: column; gap: 14px; }
+.auth-benefit {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: rgba(255,255,255,.75);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.auth-benefit-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.auth-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+  background: var(--bg);
+}
+.auth-form-inner {
+  width: 100%;
+  max-width: 380px;
+}
+
 @media (max-width: 960px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar {
@@ -267,4 +358,7 @@ textarea { min-height: 92px; resize: vertical; }
   .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero, .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
   .topbar { align-items: flex-start; flex-direction: column; }
+  .auth-landing { grid-template-columns: 1fr; }
+  .auth-hero { display: none; }
+  .auth-form-panel { min-height: 100vh; }
 }

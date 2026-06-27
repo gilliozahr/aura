@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAura } from '@/store';
-import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
 import { uid, scoreClass } from '@/lib/utils';
 import { recommendationAgent } from '@aura/agents';
@@ -83,12 +82,10 @@ function EditOutfitPanel({
 
 export default function HomeView() {
   const { state, dispatch } = useAura();
-  const { user, loading: authLoading, isSupabaseConfigured } = useAuth();
   const { toast } = useToast();
 
-  const isSignedIn = isSupabaseConfigured ? Boolean(user) : true; // local mode = always "signed in"
   const profileName = state.user.name?.trim();
-  const greeting = isSignedIn && profileName ? `Good day, ${profileName}.` : isSignedIn ? 'Good day.' : 'Welcome to AURA.';
+  const greeting = profileName ? `Good day, ${profileName}.` : 'Good day.';
 
   const [outfitItems, setOutfitItems] = useState<WardrobeItem[]>([]);
   const [report, setReport] = useState<OutfitReport | null>(null);
@@ -100,20 +97,8 @@ export default function HomeView() {
   const wardrobeLength = state.wardrobe.length;
   const hasFetched = useRef(false);
 
-  // Clear stale recommendation whenever the user signs out
-  useEffect(() => {
-    if (!isSignedIn) {
-      setReport(null);
-      setOutfitItems([]);
-      setAiError('');
-      setEditing(false);
-      setFeedbackGiven(null);
-      hasFetched.current = false;
-    }
-  }, [isSignedIn]);
-
   async function fetchOutfit(items?: WardrobeItem[]) {
-    if (!isSignedIn || authLoading || state.wardrobe.length === 0) return;
+    if (state.wardrobe.length === 0) return;
     setLoading(true);
     setAiError('');
     setFeedbackGiven(null);
@@ -141,15 +126,14 @@ export default function HomeView() {
     }
   }
 
-  // Fetch once when wardrobe first loads (only when signed in and auth resolved)
+  // Fetch once when wardrobe first loads
   useEffect(() => {
-    if (authLoading) return;
-    if (wardrobeLength > 0 && isSignedIn && !hasFetched.current) {
+    if (wardrobeLength > 0 && !hasFetched.current) {
       hasFetched.current = true;
       fetchOutfit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wardrobeLength, isSignedIn, authLoading]);
+  }, [wardrobeLength]);
 
   function handleAccept() {
     if (!report || outfitItems.length === 0) return;
@@ -221,14 +205,11 @@ export default function HomeView() {
       <div className="hero">
         {/* Left: daily briefing + outfit items */}
         <div className="briefing">
-          <p className="eyebrow">{isSignedIn ? 'AURA Daily Briefing' : 'AURA STYLE INTELLIGENCE'}</p>
+          <p className="eyebrow">AURA Daily Briefing</p>
           <h2>{greeting}</h2>
-          {isSignedIn
-            ? <p>{state.user.city || '—'} · {state.user.temperature}°C · {state.user.occasion || '—'}</p>
-            : <p style={{ color: 'var(--muted)', fontSize: 14 }}>Sign in to sync your wardrobe and unlock personalized outfit intelligence.</p>
-          }
+          <p>{state.user.city || '—'} · {state.user.temperature}°C · {state.user.occasion || '—'}</p>
 
-          {isSignedIn && (
+          {hasItems ? (
             <div className="recommendation">
               <div>
                 <span className="pill">Style goal: {state.user.styleGoal || 'Not set'}</span>
@@ -249,10 +230,6 @@ export default function HomeView() {
                 </div>
               )}
 
-              {!loading && !hasItems && (
-                <span className="pill">Load demo wardrobe or add clothes to get started</span>
-              )}
-
               {aiError && (
                 <p style={{ color: '#c0392b', fontSize: 12, marginTop: 6 }}>{aiError}</p>
               )}
@@ -263,10 +240,17 @@ export default function HomeView() {
                 </p>
               )}
             </div>
+          ) : (
+            <div className="recommendation">
+              <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.6, marginBottom: 12 }}>
+                Your wardrobe is empty. Add a few items and AURA will recommend real outfits with full intelligence scoring.
+              </p>
+              <span className="pill">No items yet</span>
+            </div>
           )}
 
           {/* Edit panel */}
-          {isSignedIn && editing && report && (
+          {editing && report && (
             <EditOutfitPanel
               outfitItems={outfitItems}
               wardrobe={state.wardrobe}
@@ -276,7 +260,7 @@ export default function HomeView() {
           )}
 
           {/* Feedback actions */}
-          {isSignedIn && report && !loading && !feedbackGiven && (
+          {report && !loading && !feedbackGiven && (
             <div className="top-actions" style={{ marginTop: 14 }}>
               <button className="primary" onClick={handleAccept}>Accept Outfit</button>
               <button className="secondary" onClick={() => setEditing(e => !e)}>
@@ -288,7 +272,7 @@ export default function HomeView() {
             </div>
           )}
 
-          {isSignedIn && feedbackGiven && (
+          {feedbackGiven && (
             <div style={{ marginTop: 14 }}>
               <span style={{ fontSize: 13, color: feedbackGiven === 'accepted' ? '#1a9e50' : '#cc8800', fontWeight: 600 }}>
                 {feedbackGiven === 'accepted' ? '✓ Outfit accepted' : '✗ Outfit rejected — refreshing…'}
@@ -305,7 +289,7 @@ export default function HomeView() {
             </div>
           )}
 
-          {isSignedIn && hasItems && !loading && (
+          {hasItems && !loading && (
             <button
               className="secondary"
               style={{ marginTop: 10, fontSize: 12, padding: '4px 12px' }}
@@ -316,14 +300,14 @@ export default function HomeView() {
           )}
         </div>
 
-        {/* Right: outfit analysis card — signed-out check must come first */}
+        {/* Right: outfit analysis card */}
         <div className="card">
-          {!isSignedIn ? (
+          {!hasItems ? (
             <>
-              <p className="eyebrow">Personal Outfit Intelligence</p>
-              <h2>Sign in to unlock.</h2>
-              <p style={{ color: 'var(--muted)', fontSize: 13 }}>
-                Sign in to analyze your wardrobe and generate real outfit recommendations.
+              <p className="eyebrow">AI Outfit Analysis</p>
+              <h2>Build your wardrobe first.</h2>
+              <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>
+                Add a few items to your wardrobe — or load the demo wardrobe — and AURA will recommend real outfits with compatibility scoring, color harmony analysis, and occasion fit.
               </p>
             </>
           ) : loading ? (
