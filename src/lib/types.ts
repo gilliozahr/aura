@@ -272,6 +272,71 @@ export interface TripPlan {
   createdAt: string;
 }
 
+// ── Occasion / Calendar Intelligence (v0.9) ───────────────────────────────
+
+export type OccasionType =
+  | 'Business Meeting'
+  | 'Dinner'
+  | 'Wedding'
+  | 'Brunch'
+  | 'Travel'
+  | 'Casual'
+  | 'Formal Event'
+  | 'Family'
+  | 'Date Night'
+  | 'Other';
+
+export type OccasionFormality =
+  | 'Casual'
+  | 'Smart Casual'
+  | 'Business'
+  | 'Cocktail'
+  | 'Formal'
+  | 'Black Tie';
+
+export interface OccasionOutfitRecommendation {
+  items: string[];
+  outfitScore: number;
+  formalityFitScore: number;
+  weatherFitScore: number;
+  styleDNAFitScore: number;
+  reasoning: string;
+  risks: string[];
+  missingItems: MissingItem[];
+  alternatives: string[];
+  aiEnhanced?: boolean;
+}
+
+export interface OccasionEvent {
+  id: string;
+  title: string;
+  eventType: OccasionType;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  city?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  countryCode?: string;
+  formality: OccasionFormality;
+  notes?: string;
+  weatherContext?: TravelWeather;
+  recommendedOutfit?: OccasionOutfitRecommendation;
+  outfitStatus: 'pending' | 'accepted' | 'rejected' | 'edited';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WeeklyOccasionBrief {
+  upcomingEvents: OccasionEvent[];
+  preparedEvents: OccasionEvent[];
+  unpreparedEvents: OccasionEvent[];
+  missingItems: MissingItem[];
+  weatherRisks: string[];
+  summary: string;
+}
+
 export interface AppState {
   user: UserProfile;
   wardrobe: WardrobeItem[];
@@ -282,6 +347,7 @@ export interface AppState {
   feedback: FeedbackEvent[];
   styleDNA?: StyleDNAProfile;
   tripPlans: TripPlan[];
+  occasionEvents: OccasionEvent[];
 }
 
 export type View =
@@ -289,6 +355,7 @@ export type View =
   | 'wardrobe'
   | 'inspiration'
   | 'packing'
+  | 'occasions'
   | 'stylist'
   | 'analytics'
   | 'settings';

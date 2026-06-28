@@ -32,6 +32,7 @@ export function defaultState(): AppState {
     stylistBookings: [],
     feedback: [],
     tripPlans: [],
+    occasionEvents: [],
   };
 }
 

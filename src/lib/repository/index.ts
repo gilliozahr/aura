@@ -2,6 +2,7 @@ import type {
   AppState,
   FeedbackEvent,
   InspirationItem,
+  OccasionEvent,
   Order,
   SavedOutfit,
   StyleDNAProfile,
@@ -27,6 +28,10 @@ export interface IRepository {
   saveTripPlan(plan: TripPlan): Promise<void>;
   updateTripPlan(id: string, updates: Partial<TripPlan>): Promise<void>;
   deleteTripPlan(id: string): Promise<void>;
+  getOccasionEvents(): Promise<OccasionEvent[]>;
+  saveOccasionEvent(event: OccasionEvent): Promise<void>;
+  updateOccasionEvent(id: string, updates: Partial<OccasionEvent>): Promise<void>;
+  deleteOccasionEvent(id: string): Promise<void>;
   reset(): Promise<void>;
   uploadImage(
     file: File,

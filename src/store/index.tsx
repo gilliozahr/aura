@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { AppState, FeedbackEvent, InspirationItem, Order, SavedOutfit, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
+import type { AppState, FeedbackEvent, InspirationItem, OccasionEvent, Order, SavedOutfit, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
 import { useToast } from './toast';
@@ -24,6 +24,10 @@ type Action =
   | { type: 'ADD_TRIP_PLAN'; payload: TripPlan }
   | { type: 'UPDATE_TRIP_PLAN'; id: string; updates: Partial<TripPlan> }
   | { type: 'DELETE_TRIP_PLAN'; id: string }
+  | { type: 'SET_OCCASION_EVENTS'; payload: OccasionEvent[] }
+  | { type: 'ADD_OCCASION_EVENT'; payload: OccasionEvent }
+  | { type: 'UPDATE_OCCASION_EVENT'; id: string; updates: Partial<OccasionEvent> }
+  | { type: 'DELETE_OCCASION_EVENT'; id: string }
   | { type: 'RESET' };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -68,6 +72,19 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'DELETE_TRIP_PLAN':
       return { ...state, tripPlans: (state.tripPlans ?? []).filter(p => p.id !== action.id) };
+    case 'SET_OCCASION_EVENTS':
+      return { ...state, occasionEvents: action.payload };
+    case 'ADD_OCCASION_EVENT':
+      return { ...state, occasionEvents: [...(state.occasionEvents ?? []), action.payload] };
+    case 'UPDATE_OCCASION_EVENT':
+      return {
+        ...state,
+        occasionEvents: (state.occasionEvents ?? []).map(e =>
+          e.id === action.id ? { ...e, ...action.updates } : e
+        ),
+      };
+    case 'DELETE_OCCASION_EVENT':
+      return { ...state, occasionEvents: (state.occasionEvents ?? []).filter(e => e.id !== action.id) };
     case 'RESET':
       return defaultState();
     default:
@@ -149,6 +166,15 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'DELETE_TRIP_PLAN':
         persist(repo.deleteTripPlan(action.id));
+        break;
+      case 'ADD_OCCASION_EVENT':
+        persist(repo.saveOccasionEvent(action.payload));
+        break;
+      case 'UPDATE_OCCASION_EVENT':
+        persist(repo.updateOccasionEvent(action.id, action.updates));
+        break;
+      case 'DELETE_OCCASION_EVENT':
+        persist(repo.deleteOccasionEvent(action.id));
         break;
       case 'RESET':
         persist(repo.reset());

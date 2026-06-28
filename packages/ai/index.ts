@@ -8,12 +8,22 @@ export interface InspirationInput {
   price: number;
 }
 
+export interface OccasionContext {
+  eventType: string;
+  formality: string;
+  date: string;
+  city?: string;
+  country?: string;
+  notes?: string;
+}
+
 export interface OutfitInput {
   items: WardrobeItem[];
   user: UserProfile;
   wardrobe: WardrobeItem[];
   weather?: WeatherContext;
   styleDNA?: StyleDNASummary;
+  occasionContext?: OccasionContext;
 }
 
 export interface InspirationContext {

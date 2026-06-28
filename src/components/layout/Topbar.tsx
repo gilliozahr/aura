@@ -10,6 +10,7 @@ const VIEW_TITLES: Record<View, string> = {
   wardrobe: 'Wardrobe',
   inspiration: 'AI Inspiration',
   packing: 'Packing',
+  occasions: 'Occasions',
   stylist: 'Stylist Network',
   analytics: 'Analytics',
   settings: 'Settings',
