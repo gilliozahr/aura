@@ -1,5 +1,5 @@
 import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
+import type { AIAdapter, InspirationContext, InspirationInput, OutfitInput, VisionInput } from '../index';
 
 const NEUTRALS = new Set([
   'black', 'white', 'beige', 'grey', 'gray', 'navy', 'camel', 'cream',
@@ -9,7 +9,7 @@ const NEUTRALS = new Set([
 export class MockAIAdapter implements AIAdapter {
   async analyzeInspiration(
     item: InspirationInput,
-    context: { wardrobe: WardrobeItem[]; user: UserProfile }
+    context: InspirationContext
   ): Promise<InspirationReport> {
     const t0 = Date.now();
     const { wardrobe, user } = context;

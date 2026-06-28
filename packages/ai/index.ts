@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata } from '@aura/types';
+import type { InspirationReport, OutfitReport, StyleDNASummary, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata } from '@aura/types';
 
 export interface InspirationInput {
   name: string;
@@ -13,6 +13,13 @@ export interface OutfitInput {
   user: UserProfile;
   wardrobe: WardrobeItem[];
   weather?: WeatherContext;
+  styleDNA?: StyleDNASummary;
+}
+
+export interface InspirationContext {
+  wardrobe: WardrobeItem[];
+  user: UserProfile;
+  styleDNA?: StyleDNASummary;
 }
 
 export interface VisionInput {
@@ -28,7 +35,7 @@ export interface VisionInput {
 export interface AIAdapter {
   analyzeInspiration(
     item: InspirationInput,
-    context: { wardrobe: WardrobeItem[]; user: UserProfile }
+    context: InspirationContext
   ): Promise<InspirationReport>;
   analyzeOutfit(input: OutfitInput): Promise<OutfitReport>;
   analyzeWardrobeImage(input: VisionInput): Promise<WardrobeAIMetadata>;

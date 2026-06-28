@@ -4,6 +4,7 @@ import type {
   InspirationItem,
   Order,
   SavedOutfit,
+  StyleDNAProfile,
   StylistBooking,
   UserProfile,
   WardrobeItem,
@@ -20,6 +21,7 @@ export interface IRepository {
   addFeedback(event: FeedbackEvent): Promise<void>;
   addSavedOutfit(outfit: SavedOutfit): Promise<void>;
   incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void>;
+  upsertStyleDNA(profile: StyleDNAProfile): Promise<void>;
   reset(): Promise<void>;
   uploadImage(
     file: File,

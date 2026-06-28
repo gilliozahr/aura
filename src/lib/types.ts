@@ -171,6 +171,37 @@ export interface FeedbackEvent {
   at: string;
 }
 
+// ── Style DNA ─────────────────────────────────────────────────────────────────
+
+export interface StyleDNAEntry {
+  value: string;
+  score: number;
+}
+
+export interface StyleDNAProfile {
+  preferredColors: StyleDNAEntry[];
+  avoidedColors: StyleDNAEntry[];
+  preferredCategories: StyleDNAEntry[];
+  preferredStyleTags: StyleDNAEntry[];
+  avoidedStyleTags: StyleDNAEntry[];
+  preferredOccasions: StyleDNAEntry[];
+  wardrobeGaps: string[];
+  favoriteOutfitPatterns: string[];
+  rejectedOutfitPatterns: string[];
+  confidenceScore: number;
+  signalCount: number;
+  lastComputedAt: string;
+}
+
+export interface StyleDNASummary {
+  preferredColors: string[];
+  preferredStyleTags: string[];
+  avoidedStyleTags: string[];
+  preferredOccasions: string[];
+  wardrobeGaps: string[];
+  confidenceScore: number;
+}
+
 export interface AppState {
   user: UserProfile;
   wardrobe: WardrobeItem[];
@@ -179,6 +210,7 @@ export interface AppState {
   orders: Order[];
   stylistBookings: StylistBooking[];
   feedback: FeedbackEvent[];
+  styleDNA?: StyleDNAProfile;
 }
 
 export type View =

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAIAdapter } from '@aura/ai';
 import type { InspirationInput } from '@aura/ai';
-import type { WardrobeItem, UserProfile } from '@aura/types';
+import type { StyleDNASummary, WardrobeItem, UserProfile } from '@aura/types';
 import { isValidItemName } from '@/lib/utils';
 
 interface RequestBody {
@@ -9,6 +9,7 @@ interface RequestBody {
   context: {
     wardrobe: WardrobeItem[];
     user: UserProfile;
+    styleDNA?: StyleDNASummary;
   };
 }
 

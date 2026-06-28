@@ -4,6 +4,7 @@ import type {
   InspirationItem,
   Order,
   SavedOutfit,
+  StyleDNAProfile,
   StylistBooking,
   UserProfile,
   WardrobeItem,
@@ -80,6 +81,10 @@ export class LocalRepository implements IRepository {
       itemIds.includes(item.id) ? { ...item, wears: item.wears + 1 } : item
     );
     this.write({ ...this.read(), wardrobe: updated });
+  }
+
+  async upsertStyleDNA(profile: StyleDNAProfile): Promise<void> {
+    this.write({ ...this.read(), styleDNA: profile });
   }
 
   async reset(): Promise<void> {

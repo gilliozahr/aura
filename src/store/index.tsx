@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { AppState, FeedbackEvent, InspirationItem, Order, SavedOutfit, StylistBooking, UserProfile, WardrobeItem } from '@/lib/types';
+import type { AppState, FeedbackEvent, InspirationItem, Order, SavedOutfit, StyleDNAProfile, StylistBooking, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
 import { useToast } from './toast';
@@ -19,6 +19,7 @@ type Action =
   | { type: 'ADD_FEEDBACK'; payload: FeedbackEvent }
   | { type: 'ADD_SAVED_OUTFIT'; payload: SavedOutfit }
   | { type: 'INCREMENT_WEARS'; itemIds: string[] }
+  | { type: 'SET_STYLE_DNA'; payload: StyleDNAProfile }
   | { type: 'RESET' };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -48,6 +49,8 @@ function reducer(state: AppState, action: Action): AppState {
           action.itemIds.includes(item.id) ? { ...item, wears: item.wears + 1 } : item
         ),
       };
+    case 'SET_STYLE_DNA':
+      return { ...state, styleDNA: action.payload };
     case 'RESET':
       return defaultState();
     default:
@@ -117,6 +120,9 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'INCREMENT_WEARS':
         persist(repo.incrementWears(action.itemIds, s.wardrobe));
+        break;
+      case 'SET_STYLE_DNA':
+        persist(repo.upsertStyleDNA(action.payload));
         break;
       case 'RESET':
         persist(repo.reset());

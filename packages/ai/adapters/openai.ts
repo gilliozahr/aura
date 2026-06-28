@@ -1,5 +1,5 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
+import type { InspirationReport, OutfitReport, StyleDNASummary, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
+import type { AIAdapter, InspirationContext, InspirationInput, OutfitInput, VisionInput } from '../index';
 import { validateReport, validateOutfitReport, validateVisionReport } from '../validate';
 import { MockAIAdapter } from './mock';
 
@@ -9,17 +9,30 @@ interface OpenAIResponse {
   choices: Array<{ message: { content: string } }>;
 }
 
+function buildDNABlock(dna: StyleDNASummary): string {
+  if (dna.confidenceScore < 30) return '';
+  const lines: string[] = [`STYLE DNA (confidence: ${dna.confidenceScore}/100 — use as soft guidance only):`];
+  if (dna.preferredColors.length) lines.push(`- Preferred colors: ${dna.preferredColors.join(', ')}`);
+  if (dna.preferredStyleTags.length) lines.push(`- Preferred styles: ${dna.preferredStyleTags.join(', ')}`);
+  if (dna.avoidedStyleTags.length) lines.push(`- Styles to avoid: ${dna.avoidedStyleTags.join(', ')}`);
+  if (dna.preferredOccasions.length) lines.push(`- Preferred occasions: ${dna.preferredOccasions.join(', ')}`);
+  if (dna.wardrobeGaps.length) lines.push(`- Wardrobe gaps: ${dna.wardrobeGaps.join(', ')}`);
+  return lines.join('\n');
+}
+
 function buildInspirationPrompt(
   item: InspirationInput,
   user: UserProfile,
   wardrobe: WardrobeItem[],
-  duplicateCount: number
+  duplicateCount: number,
+  styleDNA?: StyleDNASummary
 ): string {
+  const dnaBlock = styleDNA ? buildDNABlock(styleDNA) : '';
   return `You are AURA, an AI personal style operating system. Analyze whether the user should buy this item.
 
 ITEM: "${item.name}" | Category: ${item.category} | Color: ${item.color} | Style: ${item.style} | Price: $${item.price}
 USER: Style goal: "${user.styleGoal}" | Budget: $${user.budget}/month | City: ${user.city} | Occasion: "${user.occasion}"
-WARDROBE: ${wardrobe.length} total items | ${duplicateCount} item(s) with same category and color already owned
+WARDROBE: ${wardrobe.length} total items | ${duplicateCount} item(s) with same category and color already owned${dnaBlock ? `\n${dnaBlock}` : ''}
 
 Score all dimensions as integers 0-100:
 - styleMatchScore: alignment with the user's style goal and aesthetic
@@ -50,7 +63,7 @@ Return ONLY valid JSON, no markdown:
 {"compatibilityScore":<int>,"styleMatchScore":<int>,"wardrobeImpactScore":<int>,"budgetFitScore":<int>,"duplicateRisk":<int>,"confidence":<int>,"decision":"<BUY|WAIT|SKIP>","reasoningSummary":"<string>","whyItWorks":"<string>","risks":["<string>"],"suggestedOutfits":["<string>"],"betterAlternatives":["<string>"],"missingWardrobeOpportunities":["<string>"]}`;
 }
 
-function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext): string {
+function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext, styleDNA?: StyleDNASummary): string {
   const itemList = items
     .map(i => {
       const base = `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`;
@@ -72,6 +85,7 @@ function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: W
 - Current condition "${weather.condition}": apply relevant guidance`
     : `Weather guidance: data unavailable — set weatherFitScore to 55 and note "Weather data unavailable" in reasoningSummary`;
 
+  const dnaBlock = styleDNA ? buildDNABlock(styleDNA) : '';
   return `You are AURA, an AI personal style operating system. Analyze this outfit combination.
 
 OUTFIT ITEMS:
@@ -80,7 +94,7 @@ ${itemList}
 USER CONTEXT:
 - Style goal: "${user.styleGoal}"
 - Occasion: "${user.occasion}"
-${weatherLine}
+${weatherLine}${dnaBlock ? `\n${dnaBlock}` : ''}
 
 ${weatherGuidance}
 
@@ -110,7 +124,7 @@ Return ONLY valid JSON, no markdown:
 export class OpenAIAdapter implements AIAdapter {
   async analyzeInspiration(
     item: InspirationInput,
-    context: { wardrobe: WardrobeItem[]; user: UserProfile }
+    context: InspirationContext
   ): Promise<InspirationReport> {
     const t0 = Date.now();
     const apiKey = process.env.OPENAI_API_KEY;
@@ -121,7 +135,7 @@ export class OpenAIAdapter implements AIAdapter {
       return { ...report, _meta: { ...report._meta!, provider: 'openai', fallbackUsed: true } };
     }
 
-    const { user, wardrobe } = context;
+    const { user, wardrobe, styleDNA } = context;
     const duplicateCount = wardrobe.filter(
       w => w.category === item.category && w.color.toLowerCase() === item.color.toLowerCase()
     ).length;
@@ -135,7 +149,7 @@ export class OpenAIAdapter implements AIAdapter {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [{ role: 'user', content: buildInspirationPrompt(item, user, wardrobe, duplicateCount) }],
+          messages: [{ role: 'user', content: buildInspirationPrompt(item, user, wardrobe, duplicateCount, styleDNA) }],
           response_format: { type: 'json_object' },
           max_tokens: 1024,
           temperature: 0.3,
@@ -186,7 +200,7 @@ export class OpenAIAdapter implements AIAdapter {
       return { ...report, _meta: { ...report._meta!, provider: 'openai', fallbackUsed: true } };
     }
 
-    const { items, user, weather } = input;
+    const { items, user, weather, styleDNA } = input;
 
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -197,7 +211,7 @@ export class OpenAIAdapter implements AIAdapter {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [{ role: 'user', content: buildOutfitPrompt(items, user, weather) }],
+          messages: [{ role: 'user', content: buildOutfitPrompt(items, user, weather, styleDNA) }],
           response_format: { type: 'json_object' },
           max_tokens: 512,
           temperature: 0.3,

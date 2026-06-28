@@ -178,6 +178,67 @@ export default function AnalyticsView() {
           )}
         </div>
       </div>
+
+      {/* Style DNA panel */}
+      {state.styleDNA && state.styleDNA.confidenceScore > 0 && (
+        <div className="card" style={{ marginTop: 0 }}>
+          <p className="eyebrow">Style DNA</p>
+          <h2>Your Personal Style Memory</h2>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+            Confidence: <strong>{state.styleDNA.confidenceScore}/100</strong> · {state.styleDNA.signalCount} signals processed
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+            {state.styleDNA.preferredColors.slice(0, 5).length > 0 && (
+              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Preferred Colors</div>
+                {state.styleDNA.preferredColors.slice(0, 5).map(e => (
+                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
+                ))}
+              </div>
+            )}
+            {state.styleDNA.preferredStyleTags.slice(0, 5).length > 0 && (
+              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Style Tags</div>
+                {state.styleDNA.preferredStyleTags.slice(0, 5).map(e => (
+                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
+                ))}
+              </div>
+            )}
+            {state.styleDNA.preferredOccasions.slice(0, 3).length > 0 && (
+              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Occasions</div>
+                {state.styleDNA.preferredOccasions.slice(0, 3).map(e => (
+                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
+                ))}
+              </div>
+            )}
+            {state.styleDNA.wardrobeGaps.length > 0 && (
+              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Wardrobe Gaps</div>
+                {state.styleDNA.wardrobeGaps.map(g => (
+                  <div key={g} style={{ fontSize: 13 }}>{g}</div>
+                ))}
+              </div>
+            )}
+            {state.styleDNA.avoidedStyleTags.slice(0, 3).length > 0 && (
+              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Styles to Avoid</div>
+                {state.styleDNA.avoidedStyleTags.slice(0, 3).map(e => (
+                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          {state.styleDNA.favoriteOutfitPatterns.slice(0, 3).length > 0 && (
+            <>
+              <p className="eyebrow" style={{ marginBottom: 6 }}>Favorite Outfit Patterns</p>
+              {state.styleDNA.favoriteOutfitPatterns.slice(0, 3).map(p => (
+                <div key={p} style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 3 }}>· {p}</div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </>
   );
 }
