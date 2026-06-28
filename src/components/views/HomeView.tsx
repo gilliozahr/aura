@@ -293,6 +293,24 @@ export default function HomeView() {
     ? Math.round(state.wardrobe.reduce((s, i) => s + (i.confidence || 75), 0) / wardrobeLength)
     : 0;
 
+  // Onboarding checklist state
+  const hasWardrobeItem = wardrobeLength > 0;
+  const hasVisionItem = state.wardrobe.some(i => i.aiMetadata && Object.keys(i.aiMetadata).length > 0);
+  const hasSavedOutfit = state.outfits.length > 0;
+  const hasStyleDNA = !!state.styleDNA && state.styleDNA.confidenceScore > 0;
+  const hasTripPlan = (state.tripPlans ?? []).length > 0;
+  const hasOccasionEvent = (state.occasionEvents ?? []).length > 0;
+  const checklistItems = [
+    { label: 'Add a wardrobe item', done: hasWardrobeItem },
+    { label: 'Upload a wardrobe photo for Vision AI', done: hasVisionItem },
+    { label: 'Generate and save a daily outfit', done: hasSavedOutfit },
+    { label: 'Build your Style DNA', done: hasStyleDNA },
+    { label: 'Create a trip plan', done: hasTripPlan },
+    { label: 'Create an occasion event', done: hasOccasionEvent },
+  ];
+  const doneCount = checklistItems.filter(i => i.done).length;
+  const allDone = doneCount === checklistItems.length;
+
   return (
     <>
       <div className="hero">
@@ -545,6 +563,37 @@ export default function HomeView() {
           <span>Style Confidence</span>
         </div>
       </div>
+
+      {/* Onboarding checklist */}
+      {!allDone && (
+        <div className="card" style={{ marginTop: 18, padding: '1.25rem 1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <p className="eyebrow" style={{ margin: 0 }}>Getting Started</p>
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{doneCount}/{checklistItems.length} complete</span>
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {checklistItems.map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.875rem', color: item.done ? 'var(--muted)' : 'var(--ink)' }}>
+                <span style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
+                  background: item.done ? 'var(--good)' : 'transparent',
+                  color: item.done ? 'white' : 'var(--muted)',
+                  border: item.done ? 'none' : '1.5px solid var(--line)',
+                }}>{item.done ? '✓' : ''}</span>
+                <span style={{ textDecoration: item.done ? 'line-through' : 'none', opacity: item.done ? 0.55 : 1 }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {allDone && (
+        <div className="card" style={{ marginTop: 18, padding: '1rem 1.5rem', background: 'rgba(36,107,69,0.06)', borderColor: 'rgba(36,107,69,0.18)' }}>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--good)', fontWeight: 600 }}>
+            AURA is ready for daily use. All features are active.
+          </p>
+        </div>
+      )}
 
       {/* Recent outfit history */}
       {(() => {
