@@ -244,28 +244,47 @@ export class OpenAIAdapter implements AIAdapter {
     const apiKey = process.env.OPENAI_API_KEY;
 
     const mockFallback = (reason: VisionFallbackReason, latencyMs: number): WardrobeAIMetadata => {
-      const base = new MockAIAdapter().analyzeWardrobeImageSync();
       console.warn('[OpenAIAdapter] analyzeWardrobeImage fallback', { reason, latencyMs });
-      return { ...base, providerRequested: 'openai', provider: 'mock', fallbackUsed: true, fallbackReason: reason };
+      return new MockAIAdapter().analyzeWardrobeImageSync(reason, 'openai');
     };
 
     if (!apiKey) {
       return mockFallback('missing_openai_key', Date.now() - t0);
     }
 
-    const prompt = `You are AURA, an AI wardrobe assistant. Analyze this clothing item image and extract structured metadata.
+    const prompt = `You are AURA, an AI wardrobe assistant. Analyze the clothing item in this image and classify it precisely.
 
-${input.nameHint ? `User's name hint: "${input.nameHint}"` : ''}
+${input.nameHint ? `User label hint: "${input.nameHint}" — use this to resolve ambiguity but trust the image first.` : ''}
 
-Identify and respond with ONLY valid JSON, no markdown:
-{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Accessory|Watch|Fragrance>","detectedColor":"<primary color name, e.g. Navy, Camel, Black>","detectedStyle":"<style aesthetic, e.g. Quiet Luxury, Smart Casual, Streetwear>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<integer 0-100>,"tags":["<tag1>","<tag2>","<tag3>"],"analysisNote":"<one sentence summary>"}
+CATEGORY RULES — choose exactly one:
+- Top: shirt, t-shirt, blouse, sweater, jumper, polo, tank top, hoodie, cardigan, knitwear
+- Bottom: jeans, trousers, pants, chinos, shorts, leggings, skirt, denim, joggers
+- Shoes: sneakers, loafers, boots, sandals, heels, trainers, oxfords
+- Outerwear: coat, jacket, blazer, parka, raincoat, overcoat, suit jacket
+- Dress: dress, gown, jumpsuit, playsuit, romper
+- Bag: handbag, backpack, tote, clutch, briefcase, duffel
+- Accessory: belt, scarf, hat, cap, sunglasses, tie, jewellery, watch, fragrance
+- Other: anything not clearly fitting above categories
 
-Rules:
-- detectedCategory must be exactly one of: Top, Bottom, Shoes, Outerwear, Accessory, Watch, Fragrance
-- detectedSeason must be exactly one of: All, Summer, Winter, Spring, Autumn
-- detectedOccasion must be exactly one of: Business, Smart Casual, Casual, Evening, Travel
-- tags: 2-4 descriptive tags (material, fit, pattern, formality)
-- If you cannot clearly see the item, set confidence below 50 and note it in analysisNote`;
+SEASON RULES:
+- Summer: lightweight fabrics, shorts, sandals, linen, visible skin
+- Winter: coat, heavy knit, boots, layers, wool
+- Spring/Autumn: transitional items, light jacket, medium weight
+- All: versatile basics that work year-round (most trousers, shirts, shoes)
+
+OCCASION RULES:
+- Business: formal suit, dress shirt, blazer, formal shoes
+- Smart Casual: chinos, polo, neat jeans, loafers — not gym/beach
+- Casual: t-shirt, jeans, sneakers, everyday wear
+- Evening: dress, cocktail attire, formal gown, smart heels
+- Travel: practical, comfortable, wrinkle-resistant
+
+COLOR: state the primary dominant color precisely (e.g. "Light Blue Denim", "Camel", "Charcoal Grey", "Olive Green").
+
+Return ONLY valid JSON, no markdown:
+{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Dress|Bag|Accessory|Other>","detectedColor":"<precise color>","detectedStyle":"<style aesthetic e.g. Smart Casual, Quiet Luxury, Streetwear, Classic>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<integer 0-100, lower if image is unclear>,"tags":["<tag1>","<tag2>","<tag3>"],"analysisNote":"<one sentence describing what you see>"}
+
+IMPORTANT: jeans and denim trousers must always be "Bottom", not "Top".`;
 
     let res: Response;
     try {

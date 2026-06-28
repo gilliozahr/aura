@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAIAdapter } from '@aura/ai';
+import { createAIAdapter, getAIProvider } from '@aura/ai';
 import type { VisionInput } from '@aura/ai';
 import { createAuraServerClient } from '@/lib/supabase/server';
 
@@ -21,13 +21,18 @@ function isHttpsUrl(s: string): boolean {
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
 
-  // Read NEXT_PUBLIC_AI_PROVIDER the same way the other AI routes do
-  const providerRequested = process.env.NEXT_PUBLIC_AI_PROVIDER ?? 'mock';
+  // Resolve provider using the same priority logic as createAIAdapter:
+  // AI_PROVIDER (runtime) > NEXT_PUBLIC_AI_PROVIDER (build-time) > 'mock'
+  const providerFromRuntimeEnv = process.env.AI_PROVIDER || null;
+  const providerFromBuildEnv = process.env.NEXT_PUBLIC_AI_PROVIDER || null;
+  const providerRequested = getAIProvider();
   const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
   const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
 
   console.info('[analyze-wardrobe-image] request', {
-    providerRequested,
+    providerFromRuntimeEnv,   // AI_PROVIDER
+    providerFromBuildEnv,     // NEXT_PUBLIC_AI_PROVIDER
+    providerRequested,        // what createAIAdapter() will use
     hasOpenAIKey,
     hasAnthropicKey,
   });
@@ -77,12 +82,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       metadata,
-      // Safe diagnostic envelope — no secrets
       _debug: {
+        providerFromRuntimeEnv,
+        providerFromBuildEnv,
         providerRequested,
         providerUsed: metadata.provider,
         fallbackUsed: metadata.fallbackUsed,
         fallbackReason: metadata.fallbackReason ?? null,
+        model: metadata.model,
         hasOpenAIKey,
         hasAnthropicKey,
         latencyMs,

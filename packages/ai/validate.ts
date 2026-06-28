@@ -98,7 +98,8 @@ export function validateOutfitReport(raw: unknown): OutfitReport {
   };
 }
 
-const CATEGORIES = ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Accessory', 'Watch', 'Fragrance'];
+// Extended category list — vision prompt uses Dress/Bag/Other; legacy Watch/Fragrance still accepted
+const CATEGORIES = ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Dress', 'Bag', 'Accessory', 'Watch', 'Fragrance', 'Other'];
 const SEASONS = ['All', 'Summer', 'Winter', 'Spring', 'Autumn'];
 const OCCASIONS = ['Business', 'Smart Casual', 'Casual', 'Evening', 'Travel'];
 

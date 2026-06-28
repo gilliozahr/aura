@@ -119,6 +119,14 @@ export default function WardrobeView() {
           setAiSuggestions(m);
           setAiSuggestedFields(suggested);
         }
+      } else if (res.status !== 401) {
+        // Non-auth errors: show generic failure note without crashing
+        setAiSuggestions({
+          detectedCategory: 'Top', detectedColor: '', detectedStyle: '', detectedSeason: 'All',
+          detectedOccasion: 'Business', confidence: 0, tags: [], analysisNote: '',
+          providerRequested: 'unknown', provider: 'mock', model: 'mock',
+          fallbackUsed: true, fallbackReason: 'openai_vision_error', analyzedAt: new Date().toISOString(),
+        });
       }
     } catch {
       // Vision analysis is optional; silent fail is fine
@@ -226,9 +234,15 @@ export default function WardrobeView() {
           )}
 
           {aiSuggestions && !analyzing && (
-            <p style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, fontWeight: 600, letterSpacing: '0.04em' }}>
-              AI tagged · {aiSuggestions.confidence}% confidence — {aiSuggestions.analysisNote}
-            </p>
+            aiSuggestions.fallbackUsed ? (
+              <p style={{ fontSize: 11, color: '#cc8800', marginBottom: 4, fontWeight: 600, letterSpacing: '0.04em' }}>
+                Vision fallback: {aiSuggestions.fallbackReason ?? 'unknown'} · provider requested: {aiSuggestions.providerRequested} — fields below are not AI-detected
+              </p>
+            ) : (
+              <p style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, fontWeight: 600, letterSpacing: '0.04em' }}>
+                AI tagged · {aiSuggestions.confidence}% confidence · {aiSuggestions.provider}/{aiSuggestions.model} — {aiSuggestions.analysisNote}
+              </p>
+            )
           )}
 
           <label>
@@ -236,8 +250,9 @@ export default function WardrobeView() {
             {aiSuggestedFields.has('category') && <AISuggestionBadge label="AI" />}
             <select name="category" value={category} onChange={e => { setCategory(e.target.value); setAiSuggestedFields(prev => { const s = new Set(prev); s.delete('category'); return s; }); }}>
               <option>Top</option><option>Bottom</option><option>Shoes</option>
-              <option>Outerwear</option><option>Accessory</option><option>Watch</option>
-              <option>Fragrance</option>
+              <option>Outerwear</option><option>Dress</option><option>Bag</option>
+              <option>Accessory</option><option>Watch</option><option>Fragrance</option>
+              <option>Other</option>
             </select>
           </label>
 

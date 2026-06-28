@@ -275,19 +275,26 @@ export class AnthropicAdapter implements AIAdapter {
       base64Data = match[2];
     }
 
-    const prompt = `You are AURA, an AI wardrobe assistant. Analyze this clothing item image and extract structured metadata.
+    const prompt = `You are AURA, an AI wardrobe assistant. Analyze the clothing item in this image and classify it precisely.
 
-${input.nameHint ? `User's name hint: "${input.nameHint}"` : ''}
+${input.nameHint ? `User label hint: "${input.nameHint}" — use this to resolve ambiguity but trust the image first.` : ''}
 
-Identify and respond with ONLY valid JSON, no markdown:
-{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Accessory|Watch|Fragrance>","detectedColor":"<primary color>","detectedStyle":"<style aesthetic>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<0-100>,"tags":["<tag>"],"analysisNote":"<one sentence>"}
+CATEGORY RULES — choose exactly one:
+- Top: shirt, t-shirt, blouse, sweater, jumper, polo, tank top, hoodie, cardigan, knitwear
+- Bottom: jeans, trousers, pants, chinos, shorts, leggings, skirt, denim, joggers
+- Shoes: sneakers, loafers, boots, sandals, heels, trainers, oxfords
+- Outerwear: coat, jacket, blazer, parka, raincoat, overcoat, suit jacket
+- Dress: dress, gown, jumpsuit, playsuit, romper
+- Bag: handbag, backpack, tote, clutch, briefcase, duffel
+- Accessory: belt, scarf, hat, cap, sunglasses, tie, jewellery, watch, fragrance
+- Other: anything not clearly fitting above categories
 
-Rules:
-- detectedCategory must be exactly one of: Top, Bottom, Shoes, Outerwear, Accessory, Watch, Fragrance
-- detectedSeason must be exactly one of: All, Summer, Winter, Spring, Autumn
-- detectedOccasion must be exactly one of: Business, Smart Casual, Casual, Evening, Travel
-- tags: 2-4 descriptive tags
-- If image is unclear, set confidence below 50`;
+COLOR: state the primary dominant color precisely (e.g. "Light Blue Denim", "Camel", "Charcoal Grey").
+
+Return ONLY valid JSON, no markdown:
+{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Dress|Bag|Accessory|Other>","detectedColor":"<precise color>","detectedStyle":"<style aesthetic e.g. Smart Casual, Quiet Luxury, Streetwear, Classic>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<0-100>,"tags":["<tag>"],"analysisNote":"<one sentence>"}
+
+IMPORTANT: jeans and denim trousers must always be "Bottom", not "Top".`;
 
     let res: Response;
     try {

@@ -46,9 +46,27 @@ import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
 import { GeminiAdapter } from './adapters/gemini';
 
+/**
+ * Returns the configured AI provider name.
+ *
+ * Checks in priority order:
+ *  1. AI_PROVIDER  — server-only runtime env var (always available at request time)
+ *  2. NEXT_PUBLIC_AI_PROVIDER — build-time var (baked into server bundle at build)
+ *
+ * Use AI_PROVIDER on Vercel/Railway so the value is readable even if it wasn't
+ * set at build time. Set NEXT_PUBLIC_AI_PROVIDER if you also need it client-side.
+ */
+export function getAIProvider(): string {
+  if (typeof process === 'undefined') return 'mock';
+  return (
+    process.env.AI_PROVIDER ||
+    process.env.NEXT_PUBLIC_AI_PROVIDER ||
+    'mock'
+  );
+}
+
 export function createAIAdapter(): AIAdapter {
-  const provider =
-    typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AI_PROVIDER : undefined;
+  const provider = getAIProvider();
   if (provider === 'openai') return new OpenAIAdapter();
   if (provider === 'anthropic') return new AnthropicAdapter();
   if (provider === 'gemini') return new GeminiAdapter();
