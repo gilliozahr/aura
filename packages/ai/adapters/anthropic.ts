@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
 import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
 import { validateReport, validateOutfitReport, validateVisionReport } from '../validate';
 import { MockAIAdapter } from './mock';
@@ -243,9 +243,13 @@ export class AnthropicAdapter implements AIAdapter {
     const t0 = Date.now();
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
+    const mockFallback = (reason: VisionFallbackReason, latencyMs: number): WardrobeAIMetadata => {
+      console.warn('[AnthropicAdapter] analyzeWardrobeImage fallback', { reason, latencyMs });
+      return new MockAIAdapter().analyzeWardrobeImageSync(reason, 'anthropic');
+    };
+
     if (!apiKey) {
-      console.warn('[AnthropicAdapter] ANTHROPIC_API_KEY not set — using mock for analyzeWardrobeImage');
-      return new MockAIAdapter().analyzeWardrobeImage(input);
+      return mockFallback('missing_anthropic_key', Date.now() - t0);
     }
 
     // Resolve to base64 — Anthropic vision requires base64, not a URL
@@ -253,11 +257,9 @@ export class AnthropicAdapter implements AIAdapter {
     let base64Data: string;
 
     if (input.imageDataUrl.startsWith('https://')) {
-      // Fetch the public image and convert to base64
       const imgRes = await fetch(input.imageDataUrl).catch(() => null);
       if (!imgRes || !imgRes.ok) {
-        console.warn('[AnthropicAdapter] analyzeWardrobeImage: could not fetch image URL');
-        return new MockAIAdapter().analyzeWardrobeImage(input);
+        return mockFallback('invalid_image_url', Date.now() - t0);
       }
       const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg';
       const supported = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -267,8 +269,7 @@ export class AnthropicAdapter implements AIAdapter {
     } else {
       const match = input.imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!match) {
-        console.warn('[AnthropicAdapter] analyzeWardrobeImage: invalid data URL format');
-        return new MockAIAdapter().analyzeWardrobeImage(input);
+        return mockFallback('invalid_image_url', Date.now() - t0);
       }
       mediaType = match[1] as typeof mediaType;
       base64Data = match[2];
@@ -288,8 +289,9 @@ Rules:
 - tags: 2-4 descriptive tags
 - If image is unclear, set confidence below 50`;
 
+    let res: Response;
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': apiKey,
@@ -304,33 +306,48 @@ Rules:
             {
               role: 'user',
               content: [
-                {
-                  type: 'image',
-                  source: { type: 'base64', media_type: mediaType, data: base64Data },
-                },
+                { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
                 { type: 'text', text: prompt },
               ],
             },
           ],
         }),
       });
-
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`Anthropic HTTP ${res.status}: ${errBody.slice(0, 200)}`);
-      }
-
-      const data = (await res.json()) as AnthropicMessage;
-      const text = data.content?.[0]?.text ?? '';
-      const parsed: unknown = JSON.parse(text);
-      const latencyMs = Date.now() - t0;
-
-      console.info('[AnthropicAdapter] analyzeWardrobeImage success', { model: MODEL, latencyMs });
-      return validateVisionReport(parsed, 'anthropic', MODEL);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[AnthropicAdapter] analyzeWardrobeImage error — falling back to mock:', msg);
-      return new MockAIAdapter().analyzeWardrobeImage(input);
+      console.error('[AnthropicAdapter] analyzeWardrobeImage fetch error:', msg);
+      return mockFallback('anthropic_vision_error', Date.now() - t0);
     }
+
+    if (!res.ok) {
+      const reason: VisionFallbackReason =
+        res.status === 401 ? 'anthropic_http_401'
+        : res.status === 429 ? 'anthropic_http_429'
+        : 'anthropic_http_error';
+      const errBody = await res.text().catch(() => '');
+      console.error('[AnthropicAdapter] analyzeWardrobeImage HTTP error', { status: res.status, body: errBody.slice(0, 200) });
+      return mockFallback(reason, Date.now() - t0);
+    }
+
+    let parsed: unknown;
+    try {
+      const data = (await res.json()) as AnthropicMessage;
+      const text = data.content?.[0]?.text ?? '';
+      parsed = JSON.parse(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[AnthropicAdapter] analyzeWardrobeImage parse error:', msg);
+      return mockFallback('anthropic_parse_error', Date.now() - t0);
+    }
+
+    const latencyMs = Date.now() - t0;
+    console.info('[AnthropicAdapter] analyzeWardrobeImage success', { model: MODEL, latencyMs });
+
+    return validateVisionReport(parsed, {
+      providerRequested: 'anthropic',
+      provider: 'anthropic',
+      model: MODEL,
+      fallbackUsed: false,
+    });
   }
 }

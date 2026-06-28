@@ -21,11 +21,23 @@ function isHttpsUrl(s: string): boolean {
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
 
+  // Read NEXT_PUBLIC_AI_PROVIDER the same way the other AI routes do
+  const providerRequested = process.env.NEXT_PUBLIC_AI_PROVIDER ?? 'mock';
+  const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
+  const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
+
+  console.info('[analyze-wardrobe-image] request', {
+    providerRequested,
+    hasOpenAIKey,
+    hasAnthropicKey,
+  });
+
   try {
-    // Require an authenticated Supabase session — images belong to signed-in users
+    // Require a valid Supabase auth session
     const supabase = await createAuraServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      console.warn('[analyze-wardrobe-image] unauthenticated request rejected');
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
@@ -51,15 +63,31 @@ export async function POST(request: NextRequest) {
     const metadata = await adapter.analyzeWardrobeImage(input);
     const latencyMs = Date.now() - t0;
 
-    console.info('[analyze-wardrobe-image]', {
-      provider: process.env.NEXT_PUBLIC_AI_PROVIDER ?? 'mock',
+    console.info('[analyze-wardrobe-image] result', {
+      providerRequested,
+      providerUsed: metadata.provider,
+      fallbackUsed: metadata.fallbackUsed,
+      fallbackReason: metadata.fallbackReason ?? null,
+      model: metadata.model,
       detectedCategory: metadata.detectedCategory,
       confidence: metadata.confidence,
-      fallbackToMock: metadata.provider === 'mock',
+      hasOpenAIKey,
       latencyMs,
     });
 
-    return NextResponse.json({ metadata });
+    return NextResponse.json({
+      metadata,
+      // Safe diagnostic envelope — no secrets
+      _debug: {
+        providerRequested,
+        providerUsed: metadata.provider,
+        fallbackUsed: metadata.fallbackUsed,
+        fallbackReason: metadata.fallbackReason ?? null,
+        hasOpenAIKey,
+        hasAnthropicKey,
+        latencyMs,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Vision analysis failed';
     console.error('[analyze-wardrobe-image] unhandled error:', message);

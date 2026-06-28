@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
 import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
 import { validateReport, validateOutfitReport, validateVisionReport } from '../validate';
 import { MockAIAdapter } from './mock';
@@ -243,9 +243,14 @@ export class OpenAIAdapter implements AIAdapter {
     const t0 = Date.now();
     const apiKey = process.env.OPENAI_API_KEY;
 
+    const mockFallback = (reason: VisionFallbackReason, latencyMs: number): WardrobeAIMetadata => {
+      const base = new MockAIAdapter().analyzeWardrobeImageSync();
+      console.warn('[OpenAIAdapter] analyzeWardrobeImage fallback', { reason, latencyMs });
+      return { ...base, providerRequested: 'openai', provider: 'mock', fallbackUsed: true, fallbackReason: reason };
+    };
+
     if (!apiKey) {
-      console.warn('[OpenAIAdapter] OPENAI_API_KEY not set — using mock for analyzeWardrobeImage');
-      return new MockAIAdapter().analyzeWardrobeImage(input);
+      return mockFallback('missing_openai_key', Date.now() - t0);
     }
 
     const prompt = `You are AURA, an AI wardrobe assistant. Analyze this clothing item image and extract structured metadata.
@@ -253,16 +258,7 @@ export class OpenAIAdapter implements AIAdapter {
 ${input.nameHint ? `User's name hint: "${input.nameHint}"` : ''}
 
 Identify and respond with ONLY valid JSON, no markdown:
-{
-  "detectedCategory": "<Top|Bottom|Shoes|Outerwear|Accessory|Watch|Fragrance>",
-  "detectedColor": "<primary color name, e.g. Navy, Camel, Black>",
-  "detectedStyle": "<style aesthetic, e.g. Quiet Luxury, Smart Casual, Streetwear>",
-  "detectedSeason": "<All|Summer|Winter|Spring|Autumn>",
-  "detectedOccasion": "<Business|Smart Casual|Casual|Evening|Travel>",
-  "confidence": <integer 0-100, how confident you are>,
-  "tags": ["<tag1>", "<tag2>", "<tag3>"],
-  "analysisNote": "<one sentence summary of what you see>"
-}
+{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Accessory|Watch|Fragrance>","detectedColor":"<primary color name, e.g. Navy, Camel, Black>","detectedStyle":"<style aesthetic, e.g. Quiet Luxury, Smart Casual, Streetwear>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<integer 0-100>,"tags":["<tag1>","<tag2>","<tag3>"],"analysisNote":"<one sentence summary>"}
 
 Rules:
 - detectedCategory must be exactly one of: Top, Bottom, Shoes, Outerwear, Accessory, Watch, Fragrance
@@ -271,13 +267,11 @@ Rules:
 - tags: 2-4 descriptive tags (material, fit, pattern, formality)
 - If you cannot clearly see the item, set confidence below 50 and note it in analysisNote`;
 
+    let res: Response;
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: MODEL,
           messages: [
@@ -294,23 +288,41 @@ Rules:
           temperature: 0.2,
         }),
       });
-
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`OpenAI HTTP ${res.status}: ${errBody.slice(0, 200)}`);
-      }
-
-      const data = (await res.json()) as OpenAIResponse;
-      const text = data.choices?.[0]?.message?.content ?? '';
-      const parsed: unknown = JSON.parse(text);
-      const latencyMs = Date.now() - t0;
-
-      console.info('[OpenAIAdapter] analyzeWardrobeImage success', { model: MODEL, latencyMs });
-      return validateVisionReport(parsed, 'openai', MODEL);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[OpenAIAdapter] analyzeWardrobeImage error — falling back to mock:', msg);
-      return new MockAIAdapter().analyzeWardrobeImage(input);
+      console.error('[OpenAIAdapter] analyzeWardrobeImage fetch error:', msg);
+      return mockFallback('openai_vision_error', Date.now() - t0);
     }
+
+    if (!res.ok) {
+      const reason: VisionFallbackReason =
+        res.status === 401 ? 'openai_http_401'
+        : res.status === 429 ? 'openai_http_429'
+        : 'openai_http_error';
+      const errBody = await res.text().catch(() => '');
+      console.error('[OpenAIAdapter] analyzeWardrobeImage HTTP error', { status: res.status, body: errBody.slice(0, 200) });
+      return mockFallback(reason, Date.now() - t0);
+    }
+
+    let parsed: unknown;
+    try {
+      const data = (await res.json()) as OpenAIResponse;
+      const text = data.choices?.[0]?.message?.content ?? '';
+      parsed = JSON.parse(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[OpenAIAdapter] analyzeWardrobeImage parse error:', msg);
+      return mockFallback('openai_parse_error', Date.now() - t0);
+    }
+
+    const latencyMs = Date.now() - t0;
+    console.info('[OpenAIAdapter] analyzeWardrobeImage success', { model: MODEL, latencyMs });
+
+    return validateVisionReport(parsed, {
+      providerRequested: 'openai',
+      provider: 'openai',
+      model: MODEL,
+      fallbackUsed: false,
+    });
   }
 }

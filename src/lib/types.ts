@@ -17,6 +17,21 @@ export interface UserProfile {
   budget: number;
 }
 
+export type VisionFallbackReason =
+  | 'missing_openai_key'
+  | 'missing_anthropic_key'
+  | 'openai_http_401'
+  | 'openai_http_429'
+  | 'openai_http_error'
+  | 'openai_parse_error'
+  | 'openai_vision_error'
+  | 'anthropic_http_401'
+  | 'anthropic_http_429'
+  | 'anthropic_http_error'
+  | 'anthropic_parse_error'
+  | 'anthropic_vision_error'
+  | 'invalid_image_url';
+
 export interface WardrobeAIMetadata {
   detectedCategory: string;
   detectedColor: string;
@@ -27,8 +42,13 @@ export interface WardrobeAIMetadata {
   tags: string[];
   analysisNote: string;
   correctedFields?: string[];
+  /** The provider that was configured (e.g. 'openai', 'mock') */
+  providerRequested: string;
+  /** The provider that actually ran the analysis (may differ if fallback used) */
   provider: string;
   model: string;
+  fallbackUsed: boolean;
+  fallbackReason?: VisionFallbackReason;
   analyzedAt: string;
 }
 

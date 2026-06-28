@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeAIMetadata } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
 
 function clamp(n: unknown): number {
   const v = Number(n);
@@ -102,11 +102,19 @@ const CATEGORIES = ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Accessory', 'Watch',
 const SEASONS = ['All', 'Summer', 'Winter', 'Spring', 'Autumn'];
 const OCCASIONS = ['Business', 'Smart Casual', 'Casual', 'Evening', 'Travel'];
 
+export interface VisionReportOptions {
+  providerRequested: string;
+  provider: string;
+  model: string;
+  fallbackUsed?: boolean;
+  fallbackReason?: VisionFallbackReason;
+}
+
 /**
  * Validates and normalises an AI wardrobe vision response.
  * Never throws — always returns a usable WardrobeAIMetadata.
  */
-export function validateVisionReport(raw: unknown, provider: string, model: string): WardrobeAIMetadata {
+export function validateVisionReport(raw: unknown, opts: VisionReportOptions): WardrobeAIMetadata {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 
   const detectedCategory = CATEGORIES.includes(String(r.detectedCategory ?? ''))
@@ -133,8 +141,11 @@ export function validateVisionReport(raw: unknown, provider: string, model: stri
     confidence,
     tags,
     analysisNote,
-    provider,
-    model,
+    providerRequested: opts.providerRequested,
+    provider: opts.provider,
+    model: opts.model,
+    fallbackUsed: opts.fallbackUsed ?? false,
+    fallbackReason: opts.fallbackReason,
     analyzedAt: new Date().toISOString(),
   };
 }

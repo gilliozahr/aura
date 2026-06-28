@@ -35,6 +35,7 @@ export interface AIAdapter {
 }
 
 export { validateReport, validateOutfitReport, validateVisionReport } from './validate';
+export type { VisionReportOptions } from './validate';
 export { MockAIAdapter } from './adapters/mock';
 export { OpenAIAdapter } from './adapters/openai';
 export { AnthropicAdapter } from './adapters/anthropic';
