@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeAIMetadata } from '@aura/types';
 
 function clamp(n: unknown): number {
   const v = Number(n);
@@ -95,5 +95,46 @@ export function validateOutfitReport(raw: unknown): OutfitReport {
     missingItems: toStrArray(r.missingItems),
     alternatives: toStrArray(r.alternatives),
     _meta: r._meta as OutfitReport['_meta'],
+  };
+}
+
+const CATEGORIES = ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Accessory', 'Watch', 'Fragrance'];
+const SEASONS = ['All', 'Summer', 'Winter', 'Spring', 'Autumn'];
+const OCCASIONS = ['Business', 'Smart Casual', 'Casual', 'Evening', 'Travel'];
+
+/**
+ * Validates and normalises an AI wardrobe vision response.
+ * Never throws — always returns a usable WardrobeAIMetadata.
+ */
+export function validateVisionReport(raw: unknown, provider: string, model: string): WardrobeAIMetadata {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+
+  const detectedCategory = CATEGORIES.includes(String(r.detectedCategory ?? ''))
+    ? String(r.detectedCategory)
+    : 'Top';
+  const detectedColor = toStr(r.detectedColor, 'Neutral');
+  const detectedStyle = toStr(r.detectedStyle, 'Smart Casual');
+  const detectedSeason = SEASONS.includes(String(r.detectedSeason ?? ''))
+    ? String(r.detectedSeason)
+    : 'All';
+  const detectedOccasion = OCCASIONS.includes(String(r.detectedOccasion ?? ''))
+    ? String(r.detectedOccasion)
+    : 'Smart Casual';
+  const confidence = clamp(r.confidence ?? 70);
+  const tags = toStrArray(r.tags);
+  const analysisNote = toStr(r.analysisNote, 'Analyzed by AURA Vision AI.');
+
+  return {
+    detectedCategory,
+    detectedColor,
+    detectedStyle,
+    detectedSeason,
+    detectedOccasion,
+    confidence,
+    tags,
+    analysisNote,
+    provider,
+    model,
+    analyzedAt: new Date().toISOString(),
   };
 }

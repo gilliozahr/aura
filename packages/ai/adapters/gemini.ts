@@ -1,5 +1,5 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WardrobeAIMetadata } from '@aura/types';
+import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
 
 export class GeminiAdapter implements AIAdapter {
   async analyzeInspiration(
@@ -13,5 +13,9 @@ export class GeminiAdapter implements AIAdapter {
 
   async analyzeOutfit(_input: OutfitInput): Promise<OutfitReport> {
     throw new Error('GeminiAdapter: analyzeOutfit not yet implemented.');
+  }
+
+  async analyzeWardrobeImage(_input: VisionInput): Promise<WardrobeAIMetadata> {
+    throw new Error('GeminiAdapter: analyzeWardrobeImage not yet implemented.');
   }
 }

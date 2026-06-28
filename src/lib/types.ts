@@ -17,6 +17,21 @@ export interface UserProfile {
   budget: number;
 }
 
+export interface WardrobeAIMetadata {
+  detectedCategory: string;
+  detectedColor: string;
+  detectedStyle: string;
+  detectedSeason: string;
+  detectedOccasion: string;
+  confidence: number;
+  tags: string[];
+  analysisNote: string;
+  correctedFields?: string[];
+  provider: string;
+  model: string;
+  analyzedAt: string;
+}
+
 export interface WardrobeItem {
   id: string;
   name: string;
@@ -28,6 +43,7 @@ export interface WardrobeItem {
   wears: number;
   confidence: number;
   image: string;
+  aiMetadata?: WardrobeAIMetadata;
 }
 
 export interface ReportDebugMeta {
