@@ -150,7 +150,14 @@ function ProductImage({
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
+function isProductSufficient(product: ShoppingProduct): boolean {
+  const hasTitle = !!(product.title && product.title.length > 3);
+  const hasContent = !!(product.imageUrls.length > 0 || product.description || product.brand || product.price !== undefined || product.category);
+  return hasTitle && hasContent;
+}
+
 function ProductCard({ product }: { product: ShoppingProduct }) {
+  const sufficient = isProductSufficient(product);
   return (
     <div
       className="card"
@@ -160,7 +167,9 @@ function ProductCard({ product }: { product: ShoppingProduct }) {
         background: 'rgba(255,253,249,.95)',
       }}
     >
-      <p className="eyebrow" style={{ marginBottom: 10 }}>Product Detected</p>
+      <p className="eyebrow" style={{ marginBottom: 10 }}>
+        {sufficient ? 'Product Detected' : 'Manual product details required'}
+      </p>
 
       <ProductImage urls={product.imageUrls} title={product.title} size="full" />
 
@@ -646,6 +655,7 @@ export default function ShoppingView() {
   const { toast } = useToast();
 
   const [urlInput, setUrlInput] = useState('');
+  const [urlError, setUrlError] = useState('');
   const [phase, setPhase] = useState<'idle' | 'extracting' | 'manual' | 'analysing' | 'done'>('idle');
   const [currentProduct, setCurrentProduct] = useState<ShoppingProduct | null>(null);
   const [currentRec, setCurrentRec] = useState<ShoppingRecommendation | null>(null);
@@ -654,10 +664,32 @@ export default function ShoppingView() {
   const products = state.shoppingProducts ?? [];
   const recs = state.shoppingRecommendations ?? [];
 
+  function validateUrl(raw: string): string {
+    const url = raw.trim();
+    if (!url) return 'Please enter a product URL.';
+    let parsed: URL;
+    try {
+      // Accept bare domains like zara.com by prepending https://
+      parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+    } catch {
+      return "That doesn’t look like a valid URL. Check for typos.";
+    }
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    if (!pathname) {
+      return 'Use the exact product page URL so AURA can read the item details.';
+    }
+    return '';
+  }
+
   async function handleExtract(e: FormEvent) {
     e.preventDefault();
     const url = urlInput.trim();
-    if (!url) return;
+    const err = validateUrl(url);
+    if (err) { setUrlError(err); return; }
+    setUrlError('');
+
+    // Ensure URL has scheme before sending
+    const normalised = url.startsWith('http') ? url : `https://${url}`;
 
     setPhase('extracting');
     setCurrentProduct(null);
@@ -668,7 +700,7 @@ export default function ShoppingView() {
       const res = await fetch('/api/shopping/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: normalised }),
       });
       const data = await res.json() as {
         product?: ShoppingProduct;
@@ -677,13 +709,22 @@ export default function ShoppingView() {
         error?: string;
       };
 
+      if (res.status === 422) {
+        setUrlError(data.error ?? 'Please paste a direct product page link, not the store homepage.');
+        setPhase('idle');
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? 'Extraction failed');
       const product = data.product;
       if (!product) throw new Error('No product returned');
 
       setWarnings(data.warnings ?? []);
 
-      if (data.extractionStatus === 'manual_required') {
+      const needsManual =
+        data.extractionStatus === 'manual_required' ||
+        !isProductSufficient(product);
+
+      if (needsManual) {
         setCurrentProduct(product);
         setPhase('manual');
       } else {
@@ -748,6 +789,7 @@ export default function ShoppingView() {
 
   function handleNew() {
     setUrlInput('');
+    setUrlError('');
     setCurrentProduct(null);
     setCurrentRec(null);
     setPhase('idle');
@@ -762,18 +804,22 @@ export default function ShoppingView() {
       {/* ── Area 1: Product Link Analyzer ── */}
       <div className="card">
         <p className="eyebrow">Shopping Advisor</p>
-        <h2 style={{ marginBottom: 6 }}>Should you buy it?</h2>
+        <h2 style={{ marginBottom: 4 }}>Product Link Analyzer</h2>
         <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.55 }}>
-          Paste a product URL. AURA reads the product page, then checks compatibility against your wardrobe, Style DNA, size profile, trips, and upcoming occasions.
+          Paste a direct product page link — not the store homepage. AURA reads the item details and checks compatibility against your wardrobe, Style DNA, size profile, trips, and upcoming occasions.
         </p>
 
         <form style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} onSubmit={handleExtract}>
           <input
-            type="url"
+            type="text"
             value={urlInput}
-            onChange={e => setUrlInput(e.target.value)}
-            placeholder="https://www.zara.com/…"
-            style={{ flex: 1, minWidth: 220 }}
+            onChange={e => { setUrlInput(e.target.value); if (urlError) setUrlError(''); }}
+            placeholder="https://www.zara.com/…/product-name-p123456.html"
+            style={{
+              flex: 1,
+              minWidth: 220,
+              borderColor: urlError ? 'var(--bad)' : undefined,
+            }}
             disabled={isLoading}
           />
           <button
@@ -786,7 +832,7 @@ export default function ShoppingView() {
               ? 'Reading page…'
               : phase === 'analysing'
               ? 'Analysing…'
-              : 'Analyse'}
+              : 'Analyze Product'}
           </button>
           {phase !== 'idle' && (
             <button type="button" className="ghost" onClick={handleNew}>
@@ -794,6 +840,12 @@ export default function ShoppingView() {
             </button>
           )}
         </form>
+
+        {urlError && (
+          <p style={{ fontSize: 13, color: 'var(--bad)', margin: '8px 0 0', lineHeight: 1.4 }}>
+            {urlError}
+          </p>
+        )}
 
         {warnings.length > 0 && (
           <div style={{ marginTop: 12 }}>

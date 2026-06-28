@@ -27,6 +27,27 @@ export const runtime = 'nodejs';
 
 // ── HTML helpers ──────────────────────────────────────────────────────────────
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanText(val: string | undefined): string | undefined {
+  if (!val) return undefined;
+  const decoded = decodeHtmlEntities(val);
+  // Treat strings made entirely of whitespace / non-breaking spaces as empty
+  if (!decoded || /^[ \s]+$/.test(decoded)) return undefined;
+  return decoded;
+}
+
 function metaContent(html: string, ...props: string[]): string | undefined {
   for (const prop of props) {
     // property/name before content
@@ -42,9 +63,9 @@ function metaContent(html: string, ...props: string[]): string | undefined {
 
 function extractTitle(html: string): string | undefined {
   const og = metaContent(html, 'og:title', 'twitter:title');
-  if (og) return og;
+  if (og) return cleanText(og);
   const m = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  return m?.[1]?.trim();
+  return cleanText(m?.[1]);
 }
 
 // Walk JSON-LD looking for a Product node (handles @graph, nested arrays)
@@ -306,6 +327,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Only http/https URLs are supported' }, { status: 400 });
   }
 
+  // Reject obvious homepage URLs — pathname is empty, "/", or has no meaningful path segments
+  const pathname = parsed.pathname.replace(/\/+$/, ''); // strip trailing slashes
+  if (!pathname || pathname === '') {
+    return NextResponse.json(
+      { error: 'Please paste a direct product page link, not the store homepage.' },
+      { status: 422 }
+    );
+  }
+
   // Fetch the page
   let html = '';
   let fetchOk = false;
@@ -364,14 +394,14 @@ export async function POST(req: Request) {
   const sizes = extractSizes(html, jsonLd);
 
   const title =
-    (jsonLd?.['name'] as string | undefined)?.trim() ??
+    cleanText(jsonLd?.['name'] as string | undefined) ??
     extractTitle(html);
 
   const brand = extractBrand(html, jsonLd);
 
   const description =
-    (jsonLd?.['description'] as string | undefined)?.trim() ??
-    metaContent(html, 'og:description', 'twitter:description', 'description');
+    cleanText(jsonLd?.['description'] as string | undefined) ??
+    cleanText(metaContent(html, 'og:description', 'twitter:description', 'description'));
 
   const color =
     (jsonLd?.['color'] as string | undefined)?.trim() ??
@@ -397,6 +427,29 @@ export async function POST(req: Request) {
     : images.length > 0
     ? 'open_graph'
     : 'metadata';
+
+  // Quality gate: if no title AND no image AND no JSON-LD product schema, treat as manual_required
+  // This catches homepages that slipped past the pathname check, and blocked/JS-heavy pages
+  const hasUsableTitle = !!(title && title.length > 3);
+  const hasUsableContent = !!(images.length > 0 || description || brand || price !== undefined || category);
+  if (!hasUsableTitle && !hasUsableContent) {
+    status = 'manual_required';
+    product = {
+      id: uid(),
+      url: rawUrl,
+      imageUrls: [],
+      availableSizes: [],
+      sizeGuide: {},
+      extractionStatus: status,
+      createdAt: new Date().toISOString(),
+    };
+    return NextResponse.json({
+      product,
+      extractionStatus: status,
+      missingFields: ['title', 'brand', 'price', 'category', 'color', 'material'],
+      warnings: ['Product details could not be read from this link. Paste a direct product page or add the details manually.'],
+    });
+  }
 
   // partial if 3+ core fields missing AND no image; success if we have at minimum title + image
   const hasCore = !!(title && images.length > 0);
