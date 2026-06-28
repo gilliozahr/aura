@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuraServerClient } from '@/lib/supabase/server';
 import { generatePackingPlan } from '@/lib/packing/engine';
 import { isValidItemName } from '@/lib/utils';
+import { getTripWeather } from '@/lib/server/weather';
 import type {
   WardrobeItem,
   StyleDNAProfile,
@@ -56,41 +57,6 @@ interface StyleDNARow {
 }
 
 
-async function fetchWeather(
-  city: string,
-  baseUrl: string,
-  lat?: number,
-  lon?: number,
-  countryCode?: string,
-): Promise<TravelWeather | undefined> {
-  try {
-    // Priority: lat/lon > city,CC > city only
-    let params: string;
-    if (lat !== undefined && lon !== undefined) {
-      params = `lat=${lat}&lon=${lon}&city=${encodeURIComponent(city)}`;
-    } else if (countryCode) {
-      params = `city=${encodeURIComponent(`${city},${countryCode}`)}`;
-    } else {
-      params = `city=${encodeURIComponent(city)}`;
-    }
-    const url = `${baseUrl}/api/weather/current?${params}`;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return undefined;
-    const data = (await res.json()) as Record<string, unknown>;
-    if (!data.available) return undefined;
-    return {
-      city: (data.city as string) ?? city,
-      temperatureC: (data.temperatureC as number) ?? 20,
-      condition: (data.condition as string) ?? 'Clear',
-      humidity: data.humidity as number | undefined,
-      feelsLikeC: data.feelsLikeC as number | undefined,
-      available: true,
-      source: 'openweathermap',
-    };
-  } catch {
-    return undefined;
-  }
-}
 
 interface OpenAIEnhancement {
   dailyOutfits?: TripDailyOutfit[];
@@ -275,28 +241,21 @@ export async function POST(request: NextRequest) {
         })()
       : undefined;
 
-    // Fetch weather — priority: lat/lon > city,CC > city only
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const hasLatLon = destinationLatitude !== undefined && destinationLongitude !== undefined;
-    console.info('[packing/generate] weather lookup', {
-      destinationCity,
-      destinationCountry: destinationCountry ?? null,
-      destinationCountryCode: destinationCountryCode ?? null,
-      hasLatLon,
-      lat: hasLatLon ? destinationLatitude!.toFixed(4) : null,
-      lon: hasLatLon ? destinationLongitude!.toFixed(4) : null,
-    });
-    const weather = await fetchWeather(destinationCity, baseUrl, destinationLatitude, destinationLongitude, destinationCountryCode);
-    console.info('[packing/generate] weather result', {
-      available: weather?.available ?? false,
-      city: weather?.city ?? null,
-      condition: weather?.condition ?? null,
+    // Fetch weather directly — no HTTP loopback, calls OWM server-to-server
+    const { weather, reason: weatherReason } = await getTripWeather({
+      city: destinationCity,
+      country: destinationCountry,
+      countryCode: destinationCountryCode,
+      latitude: destinationLatitude,
+      longitude: destinationLongitude,
     });
 
     const trip = { destinationCity, destinationCountry, startDate, endDate, purpose, occasions: occasions ?? [], luggageType, laundryAvailable };
 
+    const weatherOrUndef = weather ?? undefined;
+
     // Deterministic baseline
-    const baseline = generatePackingPlan(trip, wardrobe, styleDNA, weather);
+    const baseline = generatePackingPlan(trip, wardrobe, styleDNA, weatherOrUndef);
 
     // OpenAI enhancement
     const days = Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000) + 1);
@@ -305,7 +264,7 @@ export async function POST(request: NextRequest) {
       purpose,
       days,
       luggageType,
-      weather,
+      weather: weatherOrUndef,
       wardrobe,
       styleDNA,
       baseline: { packingItems: baseline.packingItems, occasions: occasions ?? [] },
@@ -347,7 +306,7 @@ export async function POST(request: NextRequest) {
       occasions: occasions ?? [],
       luggage_type: luggageType,
       laundry_available: laundryAvailable,
-      weather_summary: weather ?? null,
+      weather_summary: weatherOrUndef ?? null,
       daily_outfits: finalPlan.dailyOutfits,
       packing_items: packingItems,
       missing_items: missingItems,
@@ -374,7 +333,7 @@ export async function POST(request: NextRequest) {
       occasions: occasions ?? [],
       luggageType,
       laundryAvailable,
-      weatherSummary: weather,
+      weatherSummary: weatherOrUndef,
       dailyOutfits: finalPlan.dailyOutfits,
       packingItems,
       missingItems,
@@ -390,6 +349,8 @@ export async function POST(request: NextRequest) {
       city: destinationCity,
       days,
       wardrobeCount: wardrobe.length,
+      weatherAvailable: weatherOrUndef?.available ?? false,
+      weatherReason: weatherReason ?? null,
       aiEnhanced,
       hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
       latencyMs,
