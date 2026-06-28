@@ -6,6 +6,7 @@ import type {
   Order,
   OutfitReport,
   SavedOutfit,
+  StyleDNAProfile,
   StylistBooking,
   UserProfile,
   WardrobeItem,
@@ -98,7 +99,7 @@ export class SupabaseRepository implements IRepository {
     if (!authUser) return defaultState();
     const uid = authUser.id;
 
-    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes] =
+    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes] =
       await Promise.all([
         this.client.from('user_profiles').select('*').eq('id', uid).single(),
         this.client.from('wardrobe_items').select('*').eq('user_id', uid),
@@ -107,6 +108,7 @@ export class SupabaseRepository implements IRepository {
         this.client.from('stylist_bookings').select('*').eq('user_id', uid),
         this.client.from('feedback_events').select('*').eq('user_id', uid),
         this.client.from('saved_outfits').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(20),
+        this.client.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
       ]);
 
     if (wardrobeRes.error) console.error('[SupabaseRepository] loadState/wardrobe:', wardrobeRes.error.message);
@@ -225,7 +227,25 @@ export class SupabaseRepository implements IRepository {
       createdAt: r.created_at,
     }));
 
-    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback };
+    const dnaRow = dnaRes.data as Record<string, unknown> | null;
+    const styleDNA: StyleDNAProfile | undefined = dnaRow
+      ? {
+          preferredColors: (dnaRow.preferred_colors as StyleDNAProfile['preferredColors']) ?? [],
+          avoidedColors: (dnaRow.avoided_colors as StyleDNAProfile['avoidedColors']) ?? [],
+          preferredCategories: (dnaRow.preferred_categories as StyleDNAProfile['preferredCategories']) ?? [],
+          preferredStyleTags: (dnaRow.preferred_style_tags as StyleDNAProfile['preferredStyleTags']) ?? [],
+          avoidedStyleTags: (dnaRow.avoided_style_tags as StyleDNAProfile['avoidedStyleTags']) ?? [],
+          preferredOccasions: (dnaRow.preferred_occasions as StyleDNAProfile['preferredOccasions']) ?? [],
+          wardrobeGaps: (dnaRow.wardrobe_gaps as string[]) ?? [],
+          favoriteOutfitPatterns: (dnaRow.favorite_outfit_patterns as string[]) ?? [],
+          rejectedOutfitPatterns: (dnaRow.rejected_outfit_patterns as string[]) ?? [],
+          confidenceScore: (dnaRow.confidence_score as number) ?? 0,
+          signalCount: (dnaRow.signal_count as number) ?? 0,
+          lastComputedAt: (dnaRow.last_computed_at as string) ?? new Date().toISOString(),
+        }
+      : undefined;
+
+    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA };
   }
 
   private assertNoError(error: { message: string } | null, ctx: string): void {
@@ -385,6 +405,28 @@ export class SupabaseRepository implements IRepository {
     }
   }
 
+  async upsertStyleDNA(profile: StyleDNAProfile): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client.from('style_dna_profiles').upsert({
+      user_id: uid,
+      preferred_colors: profile.preferredColors,
+      avoided_colors: profile.avoidedColors,
+      preferred_categories: profile.preferredCategories,
+      preferred_style_tags: profile.preferredStyleTags,
+      avoided_style_tags: profile.avoidedStyleTags,
+      preferred_occasions: profile.preferredOccasions,
+      wardrobe_gaps: profile.wardrobeGaps,
+      favorite_outfit_patterns: profile.favoriteOutfitPatterns,
+      rejected_outfit_patterns: profile.rejectedOutfitPatterns,
+      confidence_score: profile.confidenceScore,
+      signal_count: profile.signalCount,
+      last_computed_at: profile.lastComputedAt,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    this.assertNoError(error, 'upsertStyleDNA');
+  }
+
   async reset(): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
@@ -395,6 +437,7 @@ export class SupabaseRepository implements IRepository {
       this.client.from('stylist_bookings').delete().eq('user_id', uid),
       this.client.from('feedback_events').delete().eq('user_id', uid),
       this.client.from('saved_outfits').delete().eq('user_id', uid),
+      this.client.from('style_dna_profiles').delete().eq('user_id', uid),
     ]);
   }
 

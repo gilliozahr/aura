@@ -4,13 +4,30 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import type { WeatherContext } from '@/lib/types';
+import type { StyleDNAProfile, WeatherContext } from '@/lib/types';
 
 export default function SettingsView() {
   const { state, dispatch } = useAura();
   const { toast } = useToast();
   const [locating, setLocating] = useState(false);
   const [locLabel, setLocLabel] = useState('');
+  const [dnaLoading, setDnaLoading] = useState(false);
+
+  async function handleRecomputeDNA() {
+    setDnaLoading(true);
+    try {
+      const res = await fetch('/api/style-dna/recompute', { method: 'POST' });
+      const data = (await res.json()) as { profile?: StyleDNAProfile; error?: string };
+      if (!res.ok || !data.profile) throw new Error(data.error ?? 'Recompute failed');
+      dispatch({ type: 'SET_STYLE_DNA', payload: data.profile });
+      toast('Style DNA updated.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Recompute failed';
+      toast(`Style DNA error: ${msg}`);
+    } finally {
+      setDnaLoading(false);
+    }
+  }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -120,6 +137,34 @@ export default function SettingsView() {
         <label>Monthly style budget <input name="budget" type="number" defaultValue={state.user.budget} /></label>
         <button className="primary" type="submit">Save Settings</button>
       </form>
+
+      <div style={{ marginTop: 32, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+        <p className="eyebrow">Style DNA</p>
+        <h3 style={{ marginBottom: 8 }}>Your Personal Style Memory</h3>
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+          AURA learns from your wardrobe, outfit feedback, and style decisions. Confidence increases as you use AURA.
+        </p>
+        {state.styleDNA ? (
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span>Confidence: <strong style={{ color: 'var(--foreground)' }}>{state.styleDNA.confidenceScore}/100</strong></span>
+            <span>Signals processed: <strong style={{ color: 'var(--foreground)' }}>{state.styleDNA.signalCount}</strong></span>
+            <span>Last computed: <strong style={{ color: 'var(--foreground)' }}>{new Date(state.styleDNA.lastComputedAt).toLocaleDateString()}</strong></span>
+          </div>
+        ) : (
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+            No Style DNA computed yet. Add wardrobe items and provide outfit feedback to build your profile.
+          </p>
+        )}
+        <button
+          type="button"
+          className="secondary"
+          onClick={handleRecomputeDNA}
+          disabled={dnaLoading}
+          style={{ fontSize: 13, padding: '6px 14px' }}
+        >
+          {dnaLoading ? 'Computing…' : 'Recompute Style DNA'}
+        </button>
+      </div>
     </div>
   );
 }

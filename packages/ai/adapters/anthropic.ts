@@ -1,5 +1,5 @@
 import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
+import type { AIAdapter, InspirationContext, InspirationInput, OutfitInput, VisionInput } from '../index';
 import { validateReport, validateOutfitReport, validateVisionReport } from '../validate';
 import { MockAIAdapter } from './mock';
 
@@ -110,7 +110,7 @@ Respond with ONLY valid JSON, no markdown, no explanation:
 export class AnthropicAdapter implements AIAdapter {
   async analyzeInspiration(
     item: InspirationInput,
-    context: { wardrobe: WardrobeItem[]; user: UserProfile }
+    context: InspirationContext
   ): Promise<InspirationReport> {
     const t0 = Date.now();
     const apiKey = process.env.ANTHROPIC_API_KEY;

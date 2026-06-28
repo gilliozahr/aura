@@ -193,7 +193,14 @@ export default function HomeView() {
       const res = await fetch('/api/ai/recommend-outfit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wardrobe: wardrobeToUse, user: state.user, weather }),
+        body: JSON.stringify({ wardrobe: wardrobeToUse, user: state.user, weather, styleDNA: state.styleDNA ? {
+          preferredColors: state.styleDNA.preferredColors.slice(0, 5).map(e => e.value),
+          preferredStyleTags: state.styleDNA.preferredStyleTags.slice(0, 5).map(e => e.value),
+          avoidedStyleTags: state.styleDNA.avoidedStyleTags.slice(0, 3).map(e => e.value),
+          preferredOccasions: state.styleDNA.preferredOccasions.slice(0, 3).map(e => e.value),
+          wardrobeGaps: state.styleDNA.wardrobeGaps,
+          confidenceScore: state.styleDNA.confidenceScore,
+        } : undefined }),
       });
       const data = (await res.json()) as { items?: WardrobeItem[]; report?: OutfitReport; error?: string };
       if (!res.ok || !data.items || !data.report) {

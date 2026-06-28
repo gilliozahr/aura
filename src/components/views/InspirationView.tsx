@@ -233,7 +233,14 @@ export default function InspirationView() {
       const res = await fetch('/api/ai/analyze-inspiration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item: submittedItem, context: { wardrobe: state.wardrobe, user: state.user } }),
+        body: JSON.stringify({ item: submittedItem, context: { wardrobe: state.wardrobe, user: state.user, styleDNA: state.styleDNA ? {
+          preferredColors: state.styleDNA.preferredColors.slice(0, 5).map(e => e.value),
+          preferredStyleTags: state.styleDNA.preferredStyleTags.slice(0, 5).map(e => e.value),
+          avoidedStyleTags: state.styleDNA.avoidedStyleTags.slice(0, 3).map(e => e.value),
+          preferredOccasions: state.styleDNA.preferredOccasions.slice(0, 3).map(e => e.value),
+          wardrobeGaps: state.styleDNA.wardrobeGaps,
+          confidenceScore: state.styleDNA.confidenceScore,
+        } : undefined } }),
       });
 
       const data = (await res.json()) as { report?: InspirationReport; error?: string };
