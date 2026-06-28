@@ -8,6 +8,7 @@ import type {
   SavedOutfit,
   StyleDNAProfile,
   StylistBooking,
+  TripPlan,
   UserProfile,
   WardrobeItem,
 } from '@/lib/types';
@@ -99,7 +100,7 @@ export class SupabaseRepository implements IRepository {
     if (!authUser) return defaultState();
     const uid = authUser.id;
 
-    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes] =
+    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes, tripPlansRes] =
       await Promise.all([
         this.client.from('user_profiles').select('*').eq('id', uid).single(),
         this.client.from('wardrobe_items').select('*').eq('user_id', uid),
@@ -109,6 +110,7 @@ export class SupabaseRepository implements IRepository {
         this.client.from('feedback_events').select('*').eq('user_id', uid),
         this.client.from('saved_outfits').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(20),
         this.client.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
+        this.client.from('trip_plans').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
       ]);
 
     if (wardrobeRes.error) console.error('[SupabaseRepository] loadState/wardrobe:', wardrobeRes.error.message);
@@ -245,7 +247,49 @@ export class SupabaseRepository implements IRepository {
         }
       : undefined;
 
-    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA };
+    interface TripPlanRow {
+      id: string;
+      destination_city: string;
+      destination_country?: string | null;
+      start_date: string;
+      end_date: string;
+      purpose: string;
+      occasions: TripPlan['occasions'];
+      luggage_type: string;
+      laundry_available: boolean;
+      weather_summary?: TripPlan['weatherSummary'] | null;
+      daily_outfits: TripPlan['dailyOutfits'];
+      packing_items: TripPlan['packingItems'];
+      missing_items: TripPlan['missingItems'];
+      risk_notes: string[];
+      capsule_notes?: string | null;
+      ai_summary?: string | null;
+      ai_enhanced: boolean;
+      created_at: string;
+    }
+
+    const tripPlans: TripPlan[] = ((tripPlansRes.data ?? []) as unknown as TripPlanRow[]).map(r => ({
+      id: r.id,
+      destinationCity: r.destination_city,
+      destinationCountry: r.destination_country ?? undefined,
+      startDate: r.start_date,
+      endDate: r.end_date,
+      purpose: r.purpose,
+      occasions: r.occasions ?? [],
+      luggageType: r.luggage_type,
+      laundryAvailable: r.laundry_available,
+      weatherSummary: r.weather_summary ?? undefined,
+      dailyOutfits: r.daily_outfits ?? [],
+      packingItems: r.packing_items ?? [],
+      missingItems: r.missing_items ?? [],
+      riskNotes: r.risk_notes ?? [],
+      capsuleNotes: r.capsule_notes ?? undefined,
+      aiSummary: r.ai_summary ?? undefined,
+      aiEnhanced: r.ai_enhanced,
+      createdAt: r.created_at,
+    }));
+
+    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans };
   }
 
   private assertNoError(error: { message: string } | null, ctx: string): void {
@@ -427,6 +471,94 @@ export class SupabaseRepository implements IRepository {
     this.assertNoError(error, 'upsertStyleDNA');
   }
 
+  async getTripPlans(): Promise<TripPlan[]> {
+    const uid = await this.userId();
+    if (!uid) return [];
+    const { data } = await this.client
+      .from('trip_plans')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (!data) return [];
+    return (data as unknown as Array<Record<string, unknown>>).map(r => ({
+      id: r.id as string,
+      destinationCity: r.destination_city as string,
+      destinationCountry: (r.destination_country as string | null) ?? undefined,
+      startDate: r.start_date as string,
+      endDate: r.end_date as string,
+      purpose: r.purpose as string,
+      occasions: (r.occasions as TripPlan['occasions']) ?? [],
+      luggageType: r.luggage_type as string,
+      laundryAvailable: r.laundry_available as boolean,
+      weatherSummary: (r.weather_summary as TripPlan['weatherSummary']) ?? undefined,
+      dailyOutfits: (r.daily_outfits as TripPlan['dailyOutfits']) ?? [],
+      packingItems: (r.packing_items as TripPlan['packingItems']) ?? [],
+      missingItems: (r.missing_items as TripPlan['missingItems']) ?? [],
+      riskNotes: (r.risk_notes as string[]) ?? [],
+      capsuleNotes: (r.capsule_notes as string | null) ?? undefined,
+      aiSummary: (r.ai_summary as string | null) ?? undefined,
+      aiEnhanced: r.ai_enhanced as boolean,
+      createdAt: r.created_at as string,
+    }));
+  }
+
+  async saveTripPlan(plan: TripPlan): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client.from('trip_plans').upsert({
+      id: plan.id,
+      user_id: uid,
+      destination_city: plan.destinationCity,
+      destination_country: plan.destinationCountry ?? null,
+      start_date: plan.startDate,
+      end_date: plan.endDate,
+      purpose: plan.purpose,
+      occasions: plan.occasions,
+      luggage_type: plan.luggageType,
+      laundry_available: plan.laundryAvailable,
+      weather_summary: plan.weatherSummary ?? null,
+      daily_outfits: plan.dailyOutfits,
+      packing_items: plan.packingItems,
+      missing_items: plan.missingItems,
+      risk_notes: plan.riskNotes,
+      capsule_notes: plan.capsuleNotes ?? null,
+      ai_summary: plan.aiSummary ?? null,
+      ai_enhanced: plan.aiEnhanced,
+      created_at: plan.createdAt,
+      updated_at: new Date().toISOString(),
+    });
+    this.assertNoError(error, 'saveTripPlan');
+  }
+
+  async updateTripPlan(id: string, updates: Partial<TripPlan>): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.packingItems !== undefined) row.packing_items = updates.packingItems;
+    if (updates.dailyOutfits !== undefined) row.daily_outfits = updates.dailyOutfits;
+    if (updates.missingItems !== undefined) row.missing_items = updates.missingItems;
+    if (updates.riskNotes !== undefined) row.risk_notes = updates.riskNotes;
+    if (updates.capsuleNotes !== undefined) row.capsule_notes = updates.capsuleNotes;
+    if (updates.aiSummary !== undefined) row.ai_summary = updates.aiSummary;
+    const { error } = await this.client
+      .from('trip_plans')
+      .update(row)
+      .eq('id', id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'updateTripPlan');
+  }
+
+  async deleteTripPlan(id: string): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client
+      .from('trip_plans')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'deleteTripPlan');
+  }
+
   async reset(): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
@@ -438,6 +570,7 @@ export class SupabaseRepository implements IRepository {
       this.client.from('feedback_events').delete().eq('user_id', uid),
       this.client.from('saved_outfits').delete().eq('user_id', uid),
       this.client.from('style_dna_profiles').delete().eq('user_id', uid),
+      this.client.from('trip_plans').delete().eq('user_id', uid),
     ]);
   }
 

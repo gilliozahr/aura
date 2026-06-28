@@ -6,6 +6,7 @@ import type {
   SavedOutfit,
   StyleDNAProfile,
   StylistBooking,
+  TripPlan,
   UserProfile,
   WardrobeItem,
 } from '@/lib/types';
@@ -85,6 +86,28 @@ export class LocalRepository implements IRepository {
 
   async upsertStyleDNA(profile: StyleDNAProfile): Promise<void> {
     this.write({ ...this.read(), styleDNA: profile });
+  }
+
+  async getTripPlans(): Promise<TripPlan[]> {
+    return this.read().tripPlans ?? [];
+  }
+
+  async saveTripPlan(plan: TripPlan): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, tripPlans: [plan, ...(s.tripPlans ?? [])] });
+  }
+
+  async updateTripPlan(id: string, updates: Partial<TripPlan>): Promise<void> {
+    const s = this.read();
+    this.write({
+      ...s,
+      tripPlans: (s.tripPlans ?? []).map(p => (p.id === id ? { ...p, ...updates } : p)),
+    });
+  }
+
+  async deleteTripPlan(id: string): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, tripPlans: (s.tripPlans ?? []).filter(p => p.id !== id) });
   }
 
   async reset(): Promise<void> {

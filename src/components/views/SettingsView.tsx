@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAura } from '@/store';
+import { AURA_VERSION, AURA_RELEASE_NOTES } from '@/lib/version';
 import { useToast } from '@/store/toast';
 import type { StyleDNAProfile, WeatherContext } from '@/lib/types';
 
@@ -164,6 +165,33 @@ export default function SettingsView() {
         >
           {dnaLoading ? 'Computing…' : 'Recompute Style DNA'}
         </button>
+      </div>
+
+      {/* Release */}
+      <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.75rem' }}>
+          <p className="eyebrow" style={{ marginBottom: 0 }}>Release</p>
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.03em' }}>
+            {AURA_VERSION}
+          </span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+          {AURA_RELEASE_NOTES.map(note => (
+            <span
+              key={note}
+              style={{
+                padding: '0.25rem 0.65rem',
+                borderRadius: '999px',
+                background: 'rgba(140,140,140,0.08)',
+                border: '1px solid rgba(140,140,140,0.15)',
+                fontSize: '0.75rem',
+                color: 'var(--muted)',
+              }}
+            >
+              {note}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
