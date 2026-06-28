@@ -5,7 +5,11 @@ import type { FormEvent } from 'react';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid } from '@/lib/utils';
-import type { ShoppingProduct, ShoppingRecommendation } from '@/lib/types';
+import type {
+  ShoppingProduct,
+  ShoppingRecommendation,
+  ShoppingSiteRecommendation,
+} from '@/lib/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,11 +34,24 @@ function sourceLabel(src: string | undefined): string {
   if (src === 'open_graph') return 'Open Graph';
   if (src === 'metadata') return 'HTML meta';
   if (src === 'manual') return 'Manual entry';
+  if (src === 'site_guidance') return 'Website guidance';
   return 'Unknown';
 }
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function isProductSufficient(product: ShoppingProduct): boolean {
+  const hasTitle = !!(product.title && product.title.length > 3);
+  const hasContent = !!(
+    product.imageUrls.length > 0 ||
+    product.description ||
+    product.brand ||
+    product.price !== undefined ||
+    product.category
+  );
+  return hasTitle && hasContent;
 }
 
 // ── ProductImage ──────────────────────────────────────────────────────────────
@@ -54,6 +71,7 @@ function ProductImage({
 
   if (size === 'thumb') {
     return urls[0] && !failed ? (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={urls[0]}
         alt=""
@@ -78,20 +96,14 @@ function ProductImage({
     );
   }
 
-  // Full size
   return (
     <div style={{ marginBottom: 16 }}>
       {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt={title ?? 'Product'}
-          style={{
-            width: '100%',
-            maxHeight: 320,
-            objectFit: 'cover',
-            borderRadius: 16,
-            display: 'block',
-          }}
+          style={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 16, display: 'block' }}
           onError={() => {
             if (active + 1 < urls.length) setActive(a => a + 1);
             else setFailed(true);
@@ -114,7 +126,6 @@ function ProductImage({
         </div>
       )}
 
-      {/* Thumbnails strip */}
       {urls.length > 1 && !failed && (
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           {urls.map((u, i) => (
@@ -134,6 +145,7 @@ function ProductImage({
               }}
               aria-label={`Image ${i + 1}`}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={u}
                 alt=""
@@ -148,24 +160,255 @@ function ProductImage({
   );
 }
 
-// ── ProductCard ───────────────────────────────────────────────────────────────
+// ── ChoiceCard ────────────────────────────────────────────────────────────────
 
-function isProductSufficient(product: ShoppingProduct): boolean {
-  const hasTitle = !!(product.title && product.title.length > 3);
-  const hasContent = !!(product.imageUrls.length > 0 || product.description || product.brand || product.price !== undefined || product.category);
-  return hasTitle && hasContent;
+interface ChoiceCardProps {
+  url: string;
+  onAnalyzeProduct: () => void;
+  onSiteRecommend: () => void;
+  onManual: () => void;
 }
+
+function ChoiceCard({ url, onAnalyzeProduct, onSiteRecommend, onManual }: ChoiceCardProps) {
+  const host = hostOf(url);
+  return (
+    <div className="card" style={{ marginTop: 16, border: '1.5px solid var(--line)' }}>
+      <p className="eyebrow" style={{ marginBottom: 4 }}>What would you like AURA to do?</p>
+      {url && (
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.45 }}>
+          Product details could not be read from <strong>{host}</strong>. Choose how to proceed.
+        </p>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Option 1 — specific product */}
+        <div
+          style={{
+            border: '1.5px solid var(--line)',
+            borderRadius: 14,
+            padding: '14px 16px',
+          }}
+        >
+          <p style={{ margin: '0 0 3px', fontWeight: 700, fontSize: 14 }}>
+            Analyze a specific product
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+            Paste the direct product page URL so AURA can read the item details.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            style={{ fontSize: 13, padding: '6px 14px' }}
+            onClick={onAnalyzeProduct}
+          >
+            Paste product link
+          </button>
+        </div>
+
+        {/* Option 2 — site recommendations */}
+        <div
+          style={{
+            border: '1.5px solid var(--accent)',
+            borderRadius: 14,
+            padding: '14px 16px',
+            background: 'rgba(139,111,71,.04)',
+          }}
+        >
+          <p style={{ margin: '0 0 3px', fontWeight: 700, fontSize: 14 }}>
+            Get AI shopping recommendations from {host || 'this website'}
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+            AURA will use your wardrobe, Style DNA, size profile, trips, and occasions to suggest what categories or items to look for from this brand.
+          </p>
+          <button
+            type="button"
+            className="primary"
+            style={{ fontSize: 13, padding: '6px 14px' }}
+            onClick={onSiteRecommend}
+          >
+            Get recommendations
+          </button>
+        </div>
+
+        {/* Option 3 — manual */}
+        <div
+          style={{
+            border: '1.5px solid var(--line)',
+            borderRadius: 14,
+            padding: '14px 16px',
+          }}
+        >
+          <p style={{ margin: '0 0 3px', fontWeight: 700, fontSize: 14 }}>
+            Enter product details manually
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
+            Use this when the site blocks product data or you already know the item details.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            style={{ fontSize: 13, padding: '6px 14px' }}
+            onClick={onManual}
+          >
+            Enter manually
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SiteRecommendationCard ────────────────────────────────────────────────────
+
+function SiteRecommendationCard({ rec }: { rec: ShoppingSiteRecommendation }) {
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <p className="eyebrow" style={{ marginBottom: 4 }}>Website-level recommendation</p>
+      <h3 style={{ margin: '0 0 2px' }}>{rec.brandName}</h3>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)' }}>{rec.domain}</p>
+
+      <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 16 }}>
+        {rec.reasoning}
+      </p>
+
+      {/* Confidence bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <span style={{ fontSize: 13, color: 'var(--muted)', minWidth: 170, flexShrink: 0 }}>Guidance confidence</span>
+        <div style={{ flex: 1, height: 6, borderRadius: 999, background: 'var(--panel-2)', overflow: 'hidden' }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${rec.confidenceScore}%`,
+              borderRadius: 999,
+              background: rec.confidenceScore >= 65 ? 'var(--good)' : 'var(--warn)',
+              transition: 'width .4s ease',
+            }}
+          />
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 700, width: 28, textAlign: 'right' }}>{rec.confidenceScore}</span>
+      </div>
+
+      {/* Focus categories */}
+      {rec.focusCategories.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--good)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+            Worth looking at
+          </p>
+          <div className="tags">
+            {rec.focusCategories.map(c => <span key={c} className="tag">{c}</span>)}
+          </div>
+        </div>
+      )}
+
+      {/* Wardrobe gap matches */}
+      {rec.wardrobeGapMatches.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+            Could fill wardrobe gaps
+          </p>
+          <div className="tags">
+            {rec.wardrobeGapMatches.map(g => <span key={g} className="tag">{g}</span>)}
+          </div>
+        </div>
+      )}
+
+      {/* Avoid */}
+      {rec.avoidCategories.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--bad)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+            Avoid
+          </p>
+          {rec.avoidCategories.map(c => (
+            <p key={c} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>· {c}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Style notes */}
+      {rec.styleNotes && (
+        <div
+          style={{
+            fontSize: 13,
+            color: 'var(--muted)',
+            background: 'var(--panel-2)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            marginBottom: 10,
+            lineHeight: 1.5,
+          }}
+        >
+          {rec.styleNotes}
+        </div>
+      )}
+
+      {/* Size notes */}
+      {rec.sizeNotes && (
+        <div
+          style={{
+            fontSize: 13,
+            color: 'var(--muted)',
+            background: 'var(--panel-2)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            marginBottom: 10,
+            lineHeight: 1.5,
+          }}
+        >
+          {rec.sizeNotes}
+        </div>
+      )}
+
+      {/* Occasion / trip notes */}
+      {rec.occasionNotes.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          {rec.occasionNotes.map(n => (
+            <p key={n} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0', lineHeight: 1.45 }}>· {n}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div
+        style={{
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: '1px solid var(--line)',
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
+        {rec.aiEnhanced && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--accent)',
+              background: 'rgba(139,111,71,.1)',
+              borderRadius: 999,
+              padding: '3px 10px',
+            }}
+          >
+            AI Enhanced
+          </span>
+        )}
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          Based on your wardrobe, Style DNA, size profile, trips, and occasions
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── ProductCard ───────────────────────────────────────────────────────────────
 
 function ProductCard({ product }: { product: ShoppingProduct }) {
   const sufficient = isProductSufficient(product);
   return (
     <div
       className="card"
-      style={{
-        marginTop: 16,
-        border: '1.5px solid var(--line)',
-        background: 'rgba(255,253,249,.95)',
-      }}
+      style={{ marginTop: 16, border: '1.5px solid var(--line)', background: 'rgba(255,253,249,.95)' }}
     >
       <p className="eyebrow" style={{ marginBottom: 10 }}>
         {sufficient ? 'Product Detected' : 'Manual product details required'}
@@ -173,19 +416,15 @@ function ProductCard({ product }: { product: ShoppingProduct }) {
 
       <ProductImage urls={product.imageUrls} title={product.title} size="full" />
 
-      {/* Title + brand row */}
       <div style={{ marginBottom: 12 }}>
         <h2 style={{ margin: '0 0 4px', fontSize: 20, lineHeight: 1.3 }}>
           {product.title ?? <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Title not found</span>}
         </h2>
         {product.brand && (
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>
-            {product.brand}
-          </p>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>{product.brand}</p>
         )}
       </div>
 
-      {/* Pills row */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {product.price != null && (
           <span className="pill" style={{ fontWeight: 800 }}>
@@ -197,7 +436,6 @@ function ProductCard({ product }: { product: ShoppingProduct }) {
         {product.material && <span className="pill">{product.material}</span>}
       </div>
 
-      {/* Sizes */}
       {product.availableSizes.length > 0 && (
         <div style={{ marginBottom: 12 }}>
           <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
@@ -223,16 +461,12 @@ function ProductCard({ product }: { product: ShoppingProduct }) {
         </div>
       )}
 
-      {/* Description */}
       {product.description && (
         <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 12 }}>
-          {product.description.length > 280
-            ? product.description.slice(0, 280) + '…'
-            : product.description}
+          {product.description.length > 280 ? product.description.slice(0, 280) + '…' : product.description}
         </p>
       )}
 
-      {/* Footer: source + link */}
       <div
         style={{
           display: 'flex',
@@ -309,7 +543,6 @@ function RecommendationCard({
 }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      {/* Decision header */}
       <div
         style={{
           display: 'flex',
@@ -331,24 +564,13 @@ function RecommendationCard({
           </p>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div
-            style={{
-              fontSize: 34,
-              fontWeight: 900,
-              letterSpacing: '-.04em',
-              color: decisionColor(rec.decision),
-              lineHeight: 1,
-            }}
-          >
+          <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: '-.04em', color: decisionColor(rec.decision), lineHeight: 1 }}>
             {rec.decision}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-            {rec.confidenceScore}% confidence
-          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{rec.confidenceScore}% confidence</div>
         </div>
       </div>
 
-      {/* Scores */}
       <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
         Score breakdown
       </p>
@@ -361,81 +583,47 @@ function RecommendationCard({
         <ScoreBar label="Duplicate risk" score={rec.duplicateRiskScore} invert />
       </div>
 
-      {/* Size notes */}
       {rec.sizeNotes && (
-        <div
-          style={{
-            fontSize: 13,
-            color: 'var(--muted)',
-            background: 'var(--panel-2)',
-            borderRadius: 10,
-            padding: '10px 14px',
-            marginBottom: 16,
-            lineHeight: 1.5,
-          }}
-        >
+        <div style={{ fontSize: 13, color: 'var(--muted)', background: 'var(--panel-2)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, lineHeight: 1.5 }}>
           {rec.sizeNotes}
         </div>
       )}
 
-      {/* Gap match */}
       {rec.missingGapMatch?.relevant && rec.missingGapMatch.gap && (
-        <div
-          style={{
-            fontSize: 13,
-            color: 'var(--good)',
-            fontWeight: 700,
-            background: 'rgba(36,107,69,.07)',
-            borderRadius: 10,
-            padding: '8px 14px',
-            marginBottom: 16,
-          }}
-        >
+        <div style={{ fontSize: 13, color: 'var(--good)', fontWeight: 700, background: 'rgba(36,107,69,.07)', borderRadius: 10, padding: '8px 14px', marginBottom: 16 }}>
           Fills a wardrobe gap: {rec.missingGapMatch.gap}
         </div>
       )}
 
-      {/* Pairs with */}
       {rec.wardrobeMatches.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
             Pairs with your wardrobe
           </p>
-          <div className="tags">
-            {rec.wardrobeMatches.map(m => <span key={m} className="tag">{m}</span>)}
-          </div>
+          <div className="tags">{rec.wardrobeMatches.map(m => <span key={m} className="tag">{m}</span>)}</div>
         </div>
       )}
 
-      {/* Outfit ideas */}
       {rec.outfitIdeas.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
             Outfit ideas
           </p>
           {rec.outfitIdeas.map(idea => (
-            <p key={idea} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0', lineHeight: 1.45 }}>
-              · {idea}
-            </p>
+            <p key={idea} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0', lineHeight: 1.45 }}>· {idea}</p>
           ))}
         </div>
       )}
 
-      {/* Risks */}
       {rec.risks.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--bad)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-            Risks
-          </p>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--bad)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Risks</p>
           {rec.risks.map(r => (
-            <p key={r} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0', lineHeight: 1.45 }}>
-              · {r}
-            </p>
+            <p key={r} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0', lineHeight: 1.45 }}>· {r}</p>
           ))}
         </div>
       )}
 
-      {/* Alternatives */}
       {rec.alternatives.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           {rec.alternatives.map(a => (
@@ -444,29 +632,9 @@ function RecommendationCard({
         </div>
       )}
 
-      {/* Footer */}
-      <div
-        style={{
-          marginTop: 12,
-          paddingTop: 12,
-          borderTop: '1px solid var(--line)',
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {rec.aiEnhanced && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--accent)',
-              background: 'rgba(139,111,71,.1)',
-              borderRadius: 999,
-              padding: '3px 10px',
-            }}
-          >
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'rgba(139,111,71,.1)', borderRadius: 999, padding: '3px 10px' }}>
             AI Enhanced
           </span>
         )}
@@ -507,9 +675,7 @@ function ManualProductForm({ url, onSubmit, onCancel }: ManualFormProps) {
       material: str('material'),
       description: str('notes'),
       imageUrls: imageUrlRaw ? [imageUrlRaw] : [],
-      availableSizes: sizesRaw
-        ? sizesRaw.split(/[,/|]/).map(s => s.trim()).filter(Boolean)
-        : [],
+      availableSizes: sizesRaw ? sizesRaw.split(/[,/|]/).map(s => s.trim()).filter(Boolean) : [],
       sizeGuide: {},
       extractionSource: 'manual',
       extractionStatus: 'success',
@@ -523,7 +689,7 @@ function ManualProductForm({ url, onSubmit, onCancel }: ManualFormProps) {
       <p className="eyebrow">Manual Entry</p>
       <h3 style={{ marginBottom: 4 }}>Enter product details</h3>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
-        Product details could not be read automatically. Add what you know — all fields are optional.
+        Add what you know — all fields are optional. AURA will use whatever you provide.
       </p>
       <form className="form" onSubmit={handleSubmit}>
         <label>
@@ -555,9 +721,7 @@ function ManualProductForm({ url, onSubmit, onCancel }: ManualFormProps) {
         <label>
           Available sizes
           <input name="sizes" placeholder="e.g. S, M, L, XL or 30, 32, 34" />
-          <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, display: 'block' }}>
-            Comma-separated
-          </span>
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, display: 'block' }}>Comma-separated</span>
         </label>
         <label>Notes / description <textarea name="notes" placeholder="Any additional details…" style={{ minHeight: 60 }} /></label>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -628,9 +792,7 @@ function HistoryItem({ product, rec, onSelect, onDelete }: HistoryItemProps) {
 
       {rec && (
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: decisionColor(rec.decision) }}>
-            {rec.decision}
-          </div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: decisionColor(rec.decision) }}>{rec.decision}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>{rec.confidenceScore}%</div>
         </div>
       )}
@@ -650,50 +812,55 @@ function HistoryItem({ product, rec, onSelect, onDelete }: HistoryItemProps) {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
+type Phase = 'idle' | 'extracting' | 'choice' | 'manual' | 'analysing' | 'site_loading' | 'site_done' | 'done';
+
 export default function ShoppingView() {
   const { state, dispatch } = useAura();
   const { toast } = useToast();
 
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState('');
-  const [phase, setPhase] = useState<'idle' | 'extracting' | 'manual' | 'analysing' | 'done'>('idle');
+  const [phase, setPhase] = useState<Phase>('idle');
   const [currentProduct, setCurrentProduct] = useState<ShoppingProduct | null>(null);
   const [currentRec, setCurrentRec] = useState<ShoppingRecommendation | null>(null);
+  const [siteRec, setSiteRec] = useState<ShoppingSiteRecommendation | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const products = state.shoppingProducts ?? [];
   const recs = state.shoppingRecommendations ?? [];
 
-  function validateUrl(raw: string): string {
-    const url = raw.trim();
-    if (!url) return 'Please enter a product URL.';
-    let parsed: URL;
-    try {
-      // Accept bare domains like zara.com by prepending https://
-      parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
-    } catch {
-      return "That doesn’t look like a valid URL. Check for typos.";
-    }
-    const pathname = parsed.pathname.replace(/\/+$/, '');
-    if (!pathname) {
-      return 'Use the exact product page URL so AURA can read the item details.';
-    }
-    return '';
-  }
-
   async function handleExtract(e: FormEvent) {
     e.preventDefault();
-    const url = urlInput.trim();
-    const err = validateUrl(url);
-    if (err) { setUrlError(err); return; }
+    const raw = urlInput.trim();
+    if (!raw) { setUrlError('Please enter a product or store URL.'); return; }
+
+    // Parse — accept bare domains
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+    } catch {
+      setUrlError("That doesn't look like a valid URL. Check for typos.");
+      return;
+    }
     setUrlError('');
 
-    // Ensure URL has scheme before sending
-    const normalised = url.startsWith('http') ? url : `https://${url}`;
+    const normalised = parsedUrl.href;
+    const pathname = parsedUrl.pathname.replace(/\/+$/, '');
+
+    // Homepage / no meaningful path → go directly to choice card, no fetch needed
+    if (!pathname) {
+      setUrlInput(normalised);
+      setCurrentProduct(null);
+      setCurrentRec(null);
+      setSiteRec(null);
+      setPhase('choice');
+      return;
+    }
 
     setPhase('extracting');
     setCurrentProduct(null);
     setCurrentRec(null);
+    setSiteRec(null);
     setWarnings([]);
 
     try {
@@ -709,9 +876,9 @@ export default function ShoppingView() {
         error?: string;
       };
 
-      if (res.status === 422) {
-        setUrlError(data.error ?? 'Please paste a direct product page link, not the store homepage.');
-        setPhase('idle');
+      // Server-side homepage detection or blocked page → choice card
+      if (res.status === 422 || data.extractionStatus === 'manual_required') {
+        setPhase('choice');
         return;
       }
       if (!res.ok) throw new Error(data.error ?? 'Extraction failed');
@@ -720,13 +887,9 @@ export default function ShoppingView() {
 
       setWarnings(data.warnings ?? []);
 
-      const needsManual =
-        data.extractionStatus === 'manual_required' ||
-        !isProductSufficient(product);
-
-      if (needsManual) {
+      if (!isProductSufficient(product)) {
         setCurrentProduct(product);
-        setPhase('manual');
+        setPhase('choice');
       } else {
         await runAnalysis(product);
       }
@@ -765,6 +928,39 @@ export default function ShoppingView() {
     }
   }
 
+  async function handleChoiceSiteRec() {
+    setPhase('site_loading');
+    setSiteRec(null);
+    try {
+      const res = await fetch('/api/shopping/site-recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      });
+      const data = await res.json() as { recommendation?: ShoppingSiteRecommendation; error?: string };
+      if (!res.ok) throw new Error(data.error ?? 'Recommendation failed');
+      if (!data.recommendation) throw new Error('No recommendation returned');
+      setSiteRec(data.recommendation);
+      setPhase('site_done');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Recommendation failed';
+      toast(`Error: ${msg}`);
+      setPhase('choice');
+    }
+  }
+
+  function handleChoiceProduct() {
+    setUrlInput('');
+    setUrlError('');
+    setCurrentProduct(null);
+    setSiteRec(null);
+    setPhase('idle');
+  }
+
+  function handleChoiceManual() {
+    setPhase('manual');
+  }
+
   function handleManualSubmit(product: ShoppingProduct) {
     void runAnalysis(product);
   }
@@ -773,6 +969,7 @@ export default function ShoppingView() {
     const rec = recs.find(r => r.productId === product.id);
     setCurrentProduct(product);
     setCurrentRec(rec ?? null);
+    setSiteRec(null);
     setUrlInput(product.url);
     setPhase(rec ? 'done' : 'idle');
     setWarnings([]);
@@ -792,21 +989,22 @@ export default function ShoppingView() {
     setUrlError('');
     setCurrentProduct(null);
     setCurrentRec(null);
+    setSiteRec(null);
     setPhase('idle');
     setWarnings([]);
   }
 
-  const isLoading = phase === 'extracting' || phase === 'analysing';
+  const isLoading = phase === 'extracting' || phase === 'analysing' || phase === 'site_loading';
 
   return (
     <div className="view-content">
 
-      {/* ── Area 1: Product Link Analyzer ── */}
+      {/* ── URL Input ── */}
       <div className="card">
         <p className="eyebrow">Shopping Advisor</p>
         <h2 style={{ marginBottom: 4 }}>Product Link Analyzer</h2>
         <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.55 }}>
-          Paste a direct product page link — not the store homepage. AURA reads the item details and checks compatibility against your wardrobe, Style DNA, size profile, trips, and upcoming occasions.
+          Paste a product page to analyze an exact item, or paste a store link to get shopping guidance from AURA.
         </p>
 
         <form style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} onSubmit={handleExtract}>
@@ -814,12 +1012,8 @@ export default function ShoppingView() {
             type="text"
             value={urlInput}
             onChange={e => { setUrlInput(e.target.value); if (urlError) setUrlError(''); }}
-            placeholder="https://www.zara.com/…/product-name-p123456.html"
-            style={{
-              flex: 1,
-              minWidth: 220,
-              borderColor: urlError ? 'var(--bad)' : undefined,
-            }}
+            placeholder="https://www.zara.com/.../product-name-p123456.html or https://www.zara.com"
+            style={{ flex: 1, minWidth: 220, borderColor: urlError ? 'var(--bad)' : undefined }}
             disabled={isLoading}
           />
           <button
@@ -832,19 +1026,17 @@ export default function ShoppingView() {
               ? 'Reading page…'
               : phase === 'analysing'
               ? 'Analysing…'
-              : 'Analyze Product'}
+              : phase === 'site_loading'
+              ? 'Getting recommendations…'
+              : 'Analyze Link'}
           </button>
           {phase !== 'idle' && (
-            <button type="button" className="ghost" onClick={handleNew}>
-              New
-            </button>
+            <button type="button" className="ghost" onClick={handleNew}>New</button>
           )}
         </form>
 
         {urlError && (
-          <p style={{ fontSize: 13, color: 'var(--bad)', margin: '8px 0 0', lineHeight: 1.4 }}>
-            {urlError}
-          </p>
+          <p style={{ fontSize: 13, color: 'var(--bad)', margin: '8px 0 0', lineHeight: 1.4 }}>{urlError}</p>
         )}
 
         {warnings.length > 0 && (
@@ -856,32 +1048,50 @@ export default function ShoppingView() {
         )}
       </div>
 
-      {/* ── Area 2: Product Card ── */}
-      {phase === 'manual' && currentProduct && (
-        <ManualProductForm
-          url={currentProduct.url}
-          onSubmit={handleManualSubmit}
-          onCancel={() => { setPhase('idle'); setCurrentProduct(null); }}
+      {/* ── Choice Card ── */}
+      {phase === 'choice' && (
+        <ChoiceCard
+          url={urlInput}
+          onAnalyzeProduct={handleChoiceProduct}
+          onSiteRecommend={() => void handleChoiceSiteRec()}
+          onManual={handleChoiceManual}
         />
       )}
 
+      {/* ── Manual Form ── */}
+      {phase === 'manual' && (
+        <ManualProductForm
+          url={urlInput}
+          onSubmit={handleManualSubmit}
+          onCancel={() => setPhase(urlInput ? 'choice' : 'idle')}
+        />
+      )}
+
+      {/* ── Product Card (during analysis or done) ── */}
       {(phase === 'analysing' || phase === 'done') && currentProduct && (
         <ProductCard product={currentProduct} />
       )}
 
-      {/* ── Area 3: AURA Recommendation ── */}
+      {/* ── Loading placeholders ── */}
+      {phase === 'analysing' && (
+        <div className="card" style={{ marginTop: 16, textAlign: 'center', padding: 28, color: 'var(--muted)', fontSize: 14 }}>
+          Running AURA analysis — wardrobe, Style DNA, size profile, occasions, trips…
+        </div>
+      )}
+      {phase === 'site_loading' && (
+        <div className="card" style={{ marginTop: 16, textAlign: 'center', padding: 28, color: 'var(--muted)', fontSize: 14 }}>
+          Building your site-level shopping guidance…
+        </div>
+      )}
+
+      {/* ── Product Recommendation ── */}
       {phase === 'done' && currentProduct && currentRec && (
         <RecommendationCard product={currentProduct} rec={currentRec} />
       )}
 
-      {/* Loading state under product card */}
-      {phase === 'analysing' && (
-        <div
-          className="card"
-          style={{ marginTop: 16, textAlign: 'center', padding: 28, color: 'var(--muted)', fontSize: 14 }}
-        >
-          Running AURA analysis — wardrobe, Style DNA, size profile, occasions, trips…
-        </div>
+      {/* ── Site Recommendation ── */}
+      {phase === 'site_done' && siteRec && (
+        <SiteRecommendationCard rec={siteRec} />
       )}
 
       {/* ── History ── */}
@@ -902,16 +1112,13 @@ export default function ShoppingView() {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* ── Empty state ── */}
       {products.length === 0 && phase === 'idle' && (
-        <div
-          className="card"
-          style={{ marginTop: 20, textAlign: 'center', padding: '40px 24px' }}
-        >
+        <div className="card" style={{ marginTop: 20, textAlign: 'center', padding: '40px 24px' }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>🛍️</div>
           <p style={{ fontWeight: 700, margin: '0 0 6px' }}>No analyses yet</p>
           <p style={{ fontSize: 14, color: 'var(--muted)', margin: 0 }}>
-            Paste any product URL above to get a personalised Buy / Wait / Skip recommendation.
+            Paste any product URL for a Buy / Wait / Skip recommendation, or a store URL for brand-level shopping guidance.
           </p>
         </div>
       )}

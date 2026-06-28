@@ -426,6 +426,21 @@ export interface ShoppingRecommendation {
   createdAt: string;
 }
 
+export interface ShoppingSiteRecommendation {
+  domain: string;
+  brandName: string;
+  focusCategories: string[];
+  avoidCategories: string[];
+  reasoning: string;
+  styleNotes: string;
+  confidenceScore: number;
+  wardrobeGapMatches: string[];
+  sizeNotes: string;
+  occasionNotes: string[];
+  aiEnhanced: boolean;
+  createdAt: string;
+}
+
 // ── App State ─────────────────────────────────────────────────────────────────
 
 export interface AppState {
