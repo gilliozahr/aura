@@ -1,6 +1,6 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
-import { validateReport, validateOutfitReport } from '../validate';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata } from '@aura/types';
+import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
+import { validateReport, validateOutfitReport, validateVisionReport } from '../validate';
 import { MockAIAdapter } from './mock';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -52,7 +52,11 @@ Respond with ONLY valid JSON, no markdown, no explanation:
 
 function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext): string {
   const itemList = items
-    .map(i => `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`)
+    .map(i => {
+      const base = `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`;
+      if (i.aiMetadata?.tags?.length) return `${base} [AI tags: ${i.aiMetadata.tags.join(', ')}]`;
+      return base;
+    })
     .join('\n');
 
   const weatherLine = weather?.available
@@ -232,6 +236,84 @@ export class AnthropicAdapter implements AIAdapter {
           fallbackUsed: true,
         },
       };
+    }
+  }
+
+  async analyzeWardrobeImage(input: VisionInput): Promise<WardrobeAIMetadata> {
+    const t0 = Date.now();
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
+      console.warn('[AnthropicAdapter] ANTHROPIC_API_KEY not set — using mock for analyzeWardrobeImage');
+      return new MockAIAdapter().analyzeWardrobeImage(input);
+    }
+
+    // Extract base64 data from data URL
+    const match = input.imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (!match) {
+      console.warn('[AnthropicAdapter] analyzeWardrobeImage: invalid data URL format');
+      return new MockAIAdapter().analyzeWardrobeImage(input);
+    }
+    const mediaType = match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    const base64Data = match[2];
+
+    const prompt = `You are AURA, an AI wardrobe assistant. Analyze this clothing item image and extract structured metadata.
+
+${input.nameHint ? `User's name hint: "${input.nameHint}"` : ''}
+
+Identify and respond with ONLY valid JSON, no markdown:
+{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Accessory|Watch|Fragrance>","detectedColor":"<primary color>","detectedStyle":"<style aesthetic>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<0-100>,"tags":["<tag>"],"analysisNote":"<one sentence>"}
+
+Rules:
+- detectedCategory must be exactly one of: Top, Bottom, Shoes, Outerwear, Accessory, Watch, Fragrance
+- detectedSeason must be exactly one of: All, Summer, Winter, Spring, Autumn
+- detectedOccasion must be exactly one of: Business, Smart Casual, Casual, Evening, Travel
+- tags: 2-4 descriptive tags
+- If image is unclear, set confidence below 50`;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 512,
+          temperature: 0.2,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: mediaType, data: base64Data },
+                },
+                { type: 'text', text: prompt },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`Anthropic HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      }
+
+      const data = (await res.json()) as AnthropicMessage;
+      const text = data.content?.[0]?.text ?? '';
+      const parsed: unknown = JSON.parse(text);
+      const latencyMs = Date.now() - t0;
+
+      console.info('[AnthropicAdapter] analyzeWardrobeImage success', { model: MODEL, latencyMs });
+      return validateVisionReport(parsed, 'anthropic', MODEL);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[AnthropicAdapter] analyzeWardrobeImage error — falling back to mock:', msg);
+      return new MockAIAdapter().analyzeWardrobeImage(input);
     }
   }
 }

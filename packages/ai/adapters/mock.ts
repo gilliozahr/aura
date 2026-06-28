@@ -1,5 +1,5 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WardrobeAIMetadata } from '@aura/types';
+import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
 
 const NEUTRALS = new Set([
   'black', 'white', 'beige', 'grey', 'gray', 'navy', 'camel', 'cream',
@@ -183,6 +183,23 @@ export class MockAIAdapter implements AIAdapter {
         latencyMs: Date.now() - t0,
         fallbackUsed: false,
       },
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async analyzeWardrobeImage(_input: VisionInput): Promise<WardrobeAIMetadata> {
+    return {
+      detectedCategory: 'Top',
+      detectedColor: 'Navy',
+      detectedStyle: 'Smart Casual',
+      detectedSeason: 'All',
+      detectedOccasion: 'Smart Casual',
+      confidence: 72,
+      tags: ['casual', 'versatile', 'classic'],
+      analysisNote: 'Mock vision analysis — connect a real AI provider for accurate results.',
+      provider: 'mock',
+      model: 'mock',
+      analyzedAt: new Date().toISOString(),
     };
   }
 }

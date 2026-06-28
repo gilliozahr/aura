@@ -1,4 +1,4 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata } from '@aura/types';
 
 export interface InspirationInput {
   name: string;
@@ -15,15 +15,23 @@ export interface OutfitInput {
   weather?: WeatherContext;
 }
 
+export interface VisionInput {
+  /** base64 data URL (data:image/jpeg;base64,...) */
+  imageDataUrl: string;
+  /** hint from the user, e.g. "Navy blazer" */
+  nameHint?: string;
+}
+
 export interface AIAdapter {
   analyzeInspiration(
     item: InspirationInput,
     context: { wardrobe: WardrobeItem[]; user: UserProfile }
   ): Promise<InspirationReport>;
   analyzeOutfit(input: OutfitInput): Promise<OutfitReport>;
+  analyzeWardrobeImage(input: VisionInput): Promise<WardrobeAIMetadata>;
 }
 
-export { validateReport, validateOutfitReport } from './validate';
+export { validateReport, validateOutfitReport, validateVisionReport } from './validate';
 export { MockAIAdapter } from './adapters/mock';
 export { OpenAIAdapter } from './adapters/openai';
 export { AnthropicAdapter } from './adapters/anthropic';

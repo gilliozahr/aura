@@ -36,6 +36,7 @@ create table if not exists public.wardrobe_items (
   wears       integer not null default 0,
   confidence  integer not null default 78,
   image_url   text not null default '',
+  ai_metadata jsonb,
   created_at  timestamptz not null default now()
 );
 

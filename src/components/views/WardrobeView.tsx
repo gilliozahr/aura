@@ -1,12 +1,12 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ChangeEvent } from 'react';
 import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid, fileToDataURL, isDataUrl, isValidItemName } from '@/lib/utils';
-import type { WardrobeItem } from '@/lib/types';
+import type { WardrobeItem, WardrobeAIMetadata } from '@/lib/types';
 
 function ItemCard({ item }: { item: WardrobeItem }) {
   return (
@@ -30,9 +30,26 @@ function ItemCard({ item }: { item: WardrobeItem }) {
         <div className="tags">
           <span className="tag">{item.season}</span>
           <span className="tag">{item.confidence}% confidence</span>
+          {item.aiMetadata && <span className="tag" style={{ background: 'var(--accent)', color: '#fff' }}>AI tagged</span>}
         </div>
       </div>
     </article>
+  );
+}
+
+function AISuggestionBadge({ label: _label }: { label: string }) {
+  return (
+    <span style={{
+      fontSize: 10,
+      fontWeight: 600,
+      letterSpacing: '0.04em',
+      color: 'var(--accent)',
+      background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+      borderRadius: 4,
+      padding: '1px 5px',
+      marginLeft: 6,
+      verticalAlign: 'middle',
+    }}>AI</span>
   );
 }
 
@@ -40,7 +57,75 @@ export default function WardrobeView() {
   const { state, dispatch, uploadImage } = useAura();
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
+
   const [nameError, setNameError] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<WardrobeAIMetadata | null>(null);
+  const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(new Set());
+
+  // Controlled values for AI-prefilled fields
+  const [category, setCategory] = useState('Top');
+  const [color, setColor] = useState('');
+  const [season, setSeason] = useState('All');
+  const [occasion, setOccasion] = useState('Business');
+  const [style, setStyle] = useState('');
+
+  function resetForm() {
+    formRef.current?.reset();
+    setNameError('');
+    setImagePreview(null);
+    setAiSuggestions(null);
+    setAiSuggestedFields(new Set());
+    setCategory('Top');
+    setColor('');
+    setSeason('All');
+    setOccasion('Business');
+    setStyle('');
+  }
+
+  async function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const dataUrl = await fileToDataURL(file);
+    setImagePreview(dataUrl);
+    setAiSuggestions(null);
+    setAiSuggestedFields(new Set());
+
+    // Kick off AI vision analysis
+    setAnalyzing(true);
+    try {
+      const nameHint = (formRef.current?.querySelector('input[name="name"]') as HTMLInputElement | null)?.value?.trim();
+      const res = await fetch('/api/ai/analyze-wardrobe-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageDataUrl: dataUrl, nameHint: nameHint || undefined }),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as { metadata?: WardrobeAIMetadata };
+        if (data.metadata) {
+          const m = data.metadata;
+          const suggested = new Set<string>();
+
+          // Prefill only if the user hasn't manually changed the field
+          setCategory(prev => { if (prev === 'Top') { suggested.add('category'); return m.detectedCategory; } return prev; });
+          setColor(prev => { if (!prev) { suggested.add('color'); return m.detectedColor; } return prev; });
+          setSeason(prev => { if (prev === 'All') { suggested.add('season'); return m.detectedSeason; } return prev; });
+          setOccasion(prev => { if (prev === 'Business') { suggested.add('occasion'); return m.detectedOccasion; } return prev; });
+          setStyle(prev => { if (!prev) { suggested.add('style'); return m.detectedStyle; } return prev; });
+
+          setAiSuggestions(m);
+          setAiSuggestedFields(suggested);
+        }
+      }
+    } catch {
+      // Vision analysis is optional; silent fail is fine
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -55,12 +140,30 @@ export default function WardrobeView() {
 
     const imageFile = form.get('image') as File | null;
 
-    // Try Supabase Storage first; fall back to base64 data URL
     let image = '';
     if (imageFile && imageFile.size > 0) {
       const uploaded = await uploadImage(imageFile, 'wardrobe-images');
       image = uploaded ?? await fileToDataURL(imageFile);
     }
+
+    // Track which fields were AI-suggested vs user-corrected
+    const correctedFields: string[] = [];
+    for (const field of aiSuggestedFields) {
+      const formValue = (form.get(field) as string | null)?.trim();
+      const aiValue = field === 'category' ? aiSuggestions?.detectedCategory
+        : field === 'color' ? aiSuggestions?.detectedColor
+        : field === 'season' ? aiSuggestions?.detectedSeason
+        : field === 'occasion' ? aiSuggestions?.detectedOccasion
+        : field === 'style' ? aiSuggestions?.detectedStyle
+        : undefined;
+      if (formValue && aiValue && formValue !== aiValue) {
+        correctedFields.push(field);
+      }
+    }
+
+    const aiMetadata: WardrobeAIMetadata | undefined = aiSuggestions
+      ? { ...aiSuggestions, correctedFields: correctedFields.length > 0 ? correctedFields : undefined }
+      : undefined;
 
     const item: WardrobeItem = {
       id: uid(),
@@ -71,12 +174,13 @@ export default function WardrobeView() {
       occasion: form.get('occasion') as string,
       style: (form.get('style') as string) || state.user.styleGoal,
       wears: 0,
-      confidence: 78,
+      confidence: aiMetadata ? Math.round((aiMetadata.confidence + 78) / 2) : 78,
       image,
+      aiMetadata,
     };
     dispatch({ type: 'ADD_WARDROBE_ITEM', payload: item });
     toast('Item added to wardrobe.');
-    formRef.current?.reset();
+    resetForm();
   }
 
   return (
@@ -99,26 +203,76 @@ export default function WardrobeView() {
               </span>
             )}
           </label>
-          <label>Category
-            <select name="category">
+
+          <label>
+            Image
+            <input name="image" type="file" accept="image/*" onChange={handleImageChange} />
+          </label>
+
+          {/* Image preview */}
+          {imagePreview && (
+            <div style={{ position: 'relative', height: 180, borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
+              <Image src={imagePreview} alt="Preview" fill unoptimized style={{ objectFit: 'cover' }} />
+              {analyzing && (
+                <div style={{
+                  position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 13, fontWeight: 600, letterSpacing: '0.03em',
+                }}>
+                  Analyzing with AURA Vision…
+                </div>
+              )}
+            </div>
+          )}
+
+          {aiSuggestions && !analyzing && (
+            <p style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, fontWeight: 600, letterSpacing: '0.04em' }}>
+              AI tagged · {aiSuggestions.confidence}% confidence — {aiSuggestions.analysisNote}
+            </p>
+          )}
+
+          <label>
+            Category
+            {aiSuggestedFields.has('category') && <AISuggestionBadge label="AI" />}
+            <select name="category" value={category} onChange={e => { setCategory(e.target.value); setAiSuggestedFields(prev => { const s = new Set(prev); s.delete('category'); return s; }); }}>
               <option>Top</option><option>Bottom</option><option>Shoes</option>
               <option>Outerwear</option><option>Accessory</option><option>Watch</option>
               <option>Fragrance</option>
             </select>
           </label>
-          <label>Color <input name="color" placeholder="Navy" /></label>
-          <label>Season
-            <select name="season"><option>All</option><option>Summer</option><option>Winter</option></select>
+
+          <label>
+            Color
+            {aiSuggestedFields.has('color') && <AISuggestionBadge label="AI" />}
+            <input name="color" placeholder="Navy" value={color} onChange={e => { setColor(e.target.value); setAiSuggestedFields(prev => { const s = new Set(prev); s.delete('color'); return s; }); }} />
           </label>
-          <label>Occasion
-            <select name="occasion">
+
+          <label>
+            Season
+            {aiSuggestedFields.has('season') && <AISuggestionBadge label="AI" />}
+            <select name="season" value={season} onChange={e => { setSeason(e.target.value); setAiSuggestedFields(prev => { const s = new Set(prev); s.delete('season'); return s; }); }}>
+              <option>All</option><option>Summer</option><option>Winter</option><option>Spring</option><option>Autumn</option>
+            </select>
+          </label>
+
+          <label>
+            Occasion
+            {aiSuggestedFields.has('occasion') && <AISuggestionBadge label="AI" />}
+            <select name="occasion" value={occasion} onChange={e => { setOccasion(e.target.value); setAiSuggestedFields(prev => { const s = new Set(prev); s.delete('occasion'); return s; }); }}>
               <option>Business</option><option>Smart Casual</option><option>Casual</option>
               <option>Evening</option><option>Travel</option>
             </select>
           </label>
-          <label>Style <input name="style" placeholder="Quiet Luxury" /></label>
-          <label>Image <input name="image" type="file" accept="image/*" /></label>
-          <button className="primary" type="submit">Add to Wardrobe</button>
+
+          <label>
+            Style
+            {aiSuggestedFields.has('style') && <AISuggestionBadge label="AI" />}
+            <input name="style" placeholder="Quiet Luxury" value={style} onChange={e => { setStyle(e.target.value); setAiSuggestedFields(prev => { const s = new Set(prev); s.delete('style'); return s; }); }} />
+          </label>
+
+          <button className="primary" type="submit" disabled={analyzing}>
+            {analyzing ? 'Analyzing image…' : 'Add to Wardrobe'}
+          </button>
         </form>
       </div>
 

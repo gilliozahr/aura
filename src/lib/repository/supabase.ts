@@ -35,6 +35,7 @@ interface WardrobeRow {
   wears: number;
   confidence: number;
   image_url: string;
+  ai_metadata?: Record<string, unknown> | null;
 }
 interface InspirationRow {
   id: string;
@@ -164,6 +165,7 @@ export class SupabaseRepository implements IRepository {
       wears: r.wears,
       confidence: r.confidence,
       image: r.image_url,
+      aiMetadata: r.ai_metadata as WardrobeItem['aiMetadata'] ?? undefined,
     }));
 
     const inspirations: InspirationItem[] = (
@@ -257,6 +259,7 @@ export class SupabaseRepository implements IRepository {
       wears: item.wears,
       confidence: item.confidence,
       image_url: item.image,
+      ai_metadata: item.aiMetadata ?? null,
     });
     this.assertNoError(error, 'addWardrobeItem');
   }
@@ -280,6 +283,7 @@ export class SupabaseRepository implements IRepository {
         wears: item.wears,
         confidence: item.confidence,
         image_url: item.image,
+        ai_metadata: item.aiMetadata ?? null,
       }))
     );
     this.assertNoError(insErr, 'setWardrobe/insert');
