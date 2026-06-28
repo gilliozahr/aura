@@ -480,7 +480,7 @@ function fieldError(msg: string) {
 }
 
 function TripForm({ onSubmit, loading, error }: {
-  onSubmit: (form: FormState & { detectedLatitude?: number; detectedLongitude?: number }) => Promise<void>;
+  onSubmit: (form: FormState & { detectedLatitude?: number; detectedLongitude?: number; detectedCountryCode?: string }) => Promise<void>;
   loading: boolean;
   error: string | null;
 }) {
@@ -502,7 +502,7 @@ function TripForm({ onSubmit, loading, error }: {
   // Track if country was manually changed after auto-detect so we don't re-override
   const [countryManuallySet, setCountryManuallySet] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const detectedCoordsRef = useRef<{ lat?: number; lon?: number }>({});
+  const detectedCoordsRef = useRef<{ lat?: number; lon?: number; countryCode?: string }>({});
 
   function handleChange(field: keyof FormState, value: string | boolean) {
     setForm(f => ({ ...f, [field]: value }));
@@ -537,6 +537,7 @@ function TripForm({ onSubmit, loading, error }: {
           detectedCoordsRef.current = {
             lat: data.latitude,
             lon: data.longitude,
+            countryCode: data.countryCode,
           };
         }
       } catch {
@@ -599,6 +600,7 @@ function TripForm({ onSubmit, loading, error }: {
             ...form,
             detectedLatitude: detectedCoordsRef.current.lat,
             detectedLongitude: detectedCoordsRef.current.lon,
+            detectedCountryCode: detectedCoordsRef.current.countryCode,
           });
         }}
       >
@@ -715,7 +717,7 @@ export default function PackingView() {
 
   const selectedPlan = tripPlans.find(p => p.id === selectedPlanId) ?? null;
 
-  async function handleGeneratePlan(form: FormState & { detectedLatitude?: number; detectedLongitude?: number }) {
+  async function handleGeneratePlan(form: FormState & { detectedLatitude?: number; detectedLongitude?: number; detectedCountryCode?: string }) {
     setLoading(true);
     setError(null);
     try {
@@ -727,6 +729,7 @@ export default function PackingView() {
           destinationCountry: form.destinationCountry || undefined,
           destinationLatitude: form.detectedLatitude,
           destinationLongitude: form.detectedLongitude,
+          destinationCountryCode: form.detectedCountryCode,
           startDate: form.startDate,
           endDate: form.endDate,
           purpose: form.purpose,

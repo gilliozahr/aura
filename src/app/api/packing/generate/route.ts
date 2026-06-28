@@ -16,6 +16,7 @@ import type {
 interface RequestBody {
   destinationCity: string;
   destinationCountry?: string;
+  destinationCountryCode?: string;
   destinationLatitude?: number;
   destinationLongitude?: number;
   startDate: string;
@@ -60,11 +61,18 @@ async function fetchWeather(
   baseUrl: string,
   lat?: number,
   lon?: number,
+  countryCode?: string,
 ): Promise<TravelWeather | undefined> {
   try {
-    const params = lat !== undefined && lon !== undefined
-      ? `lat=${lat}&lon=${lon}&city=${encodeURIComponent(city)}`
-      : `city=${encodeURIComponent(city)}`;
+    // Priority: lat/lon > city,CC > city only
+    let params: string;
+    if (lat !== undefined && lon !== undefined) {
+      params = `lat=${lat}&lon=${lon}&city=${encodeURIComponent(city)}`;
+    } else if (countryCode) {
+      params = `city=${encodeURIComponent(`${city},${countryCode}`)}`;
+    } else {
+      params = `city=${encodeURIComponent(city)}`;
+    }
     const url = `${baseUrl}/api/weather/current?${params}`;
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return undefined;
@@ -191,7 +199,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as RequestBody;
-    const { destinationCity, destinationCountry, destinationLatitude, destinationLongitude, startDate, endDate, purpose, occasions, luggageType, laundryAvailable } = body;
+    const { destinationCity, destinationCountry, destinationCountryCode, destinationLatitude, destinationLongitude, startDate, endDate, purpose, occasions, luggageType, laundryAvailable } = body;
 
     const cityTrimmed = (destinationCity ?? '').trim();
     const countryTrimmed = (destinationCountry ?? '').trim();
@@ -267,9 +275,23 @@ export async function POST(request: NextRequest) {
         })()
       : undefined;
 
-    // Fetch weather — use lat/lon from city lookup when available for better accuracy
+    // Fetch weather — priority: lat/lon > city,CC > city only
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const weather = await fetchWeather(destinationCity, baseUrl, destinationLatitude, destinationLongitude);
+    const hasLatLon = destinationLatitude !== undefined && destinationLongitude !== undefined;
+    console.info('[packing/generate] weather lookup', {
+      destinationCity,
+      destinationCountry: destinationCountry ?? null,
+      destinationCountryCode: destinationCountryCode ?? null,
+      hasLatLon,
+      lat: hasLatLon ? destinationLatitude!.toFixed(4) : null,
+      lon: hasLatLon ? destinationLongitude!.toFixed(4) : null,
+    });
+    const weather = await fetchWeather(destinationCity, baseUrl, destinationLatitude, destinationLongitude, destinationCountryCode);
+    console.info('[packing/generate] weather result', {
+      available: weather?.available ?? false,
+      city: weather?.city ?? null,
+      condition: weather?.condition ?? null,
+    });
 
     const trip = { destinationCity, destinationCountry, startDate, endDate, purpose, occasions: occasions ?? [], luggageType, laundryAvailable };
 
