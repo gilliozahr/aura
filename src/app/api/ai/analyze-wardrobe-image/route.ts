@@ -10,12 +10,21 @@ interface RequestBody {
 
 const MAX_DATA_URL_BYTES = 4 * 1024 * 1024; // 4 MB base64 limit
 
+const SUPPORTED_VISION_MIME_TYPES = new Set([
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
+]);
+
 function isDataUrl(s: string): boolean {
   return s.startsWith('data:image/');
 }
 
 function isHttpsUrl(s: string): boolean {
   return s.startsWith('https://');
+}
+
+function extractDataUrlMime(s: string): string | null {
+  const m = s.match(/^data:(image\/[^;]+);base64,/);
+  return m ? m[1].toLowerCase() : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -61,6 +70,28 @@ export async function POST(request: NextRequest) {
         { error: 'Image is too large. Please use an image under 3 MB.' },
         { status: 400 }
       );
+    }
+
+    // Reject unsupported MIME types before hitting the AI provider
+    if (isDataUrl(imageDataUrl)) {
+      const mime = extractDataUrlMime(imageDataUrl);
+      if (!mime || !SUPPORTED_VISION_MIME_TYPES.has(mime)) {
+        console.warn('[analyze-wardrobe-image] unsupported image MIME type', { mime });
+        return NextResponse.json(
+          {
+            error: 'Unsupported image format. Please upload a JPG, PNG, WEBP, or GIF.',
+            _debug: {
+              providerFromRuntimeEnv,
+              providerFromBuildEnv,
+              providerRequested,
+              fallbackReason: 'unsupported_image_format',
+              fallbackUsed: true,
+              mime,
+            },
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const input: VisionInput = { imageDataUrl, nameHint: nameHint?.trim() };

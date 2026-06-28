@@ -30,7 +30,8 @@ export type VisionFallbackReason =
   | 'anthropic_http_error'
   | 'anthropic_parse_error'
   | 'anthropic_vision_error'
-  | 'invalid_image_url';
+  | 'invalid_image_url'
+  | 'unsupported_image_format';
 
 export interface WardrobeAIMetadata {
   detectedCategory: string;

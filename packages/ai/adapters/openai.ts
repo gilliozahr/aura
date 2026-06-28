@@ -314,12 +314,14 @@ IMPORTANT: jeans and denim trousers must always be "Bottom", not "Top".`;
     }
 
     if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      const isFormatError = res.status === 400 && errBody.toLowerCase().includes('unsupported image');
       const reason: VisionFallbackReason =
-        res.status === 401 ? 'openai_http_401'
+        isFormatError ? 'unsupported_image_format'
+        : res.status === 401 ? 'openai_http_401'
         : res.status === 429 ? 'openai_http_429'
         : 'openai_http_error';
-      const errBody = await res.text().catch(() => '');
-      console.error('[OpenAIAdapter] analyzeWardrobeImage HTTP error', { status: res.status, body: errBody.slice(0, 200) });
+      console.error('[OpenAIAdapter] analyzeWardrobeImage HTTP error', { status: res.status, reason, body: errBody.slice(0, 200) });
       return mockFallback(reason, Date.now() - t0);
     }
 

@@ -8,6 +8,43 @@ import { useToast } from '@/store/toast';
 import { uid, fileToDataURL, isDataUrl, isValidItemName } from '@/lib/utils';
 import type { WardrobeItem, WardrobeAIMetadata } from '@/lib/types';
 
+const SUPPORTED_VISION_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+
+async function toSupportedImageDataUrl(file: File): Promise<{ dataUrl: string; converted: boolean } | { error: string }> {
+  const mimeType = file.type.toLowerCase();
+
+  if (SUPPORTED_VISION_TYPES.has(mimeType)) {
+    return { dataUrl: await fileToDataURL(file), converted: false };
+  }
+
+  // Attempt canvas conversion — works for HEIC/HEIF on Safari; img.onerror fires on Chrome
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve({ error: 'Canvas unavailable.' }); return; }
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        URL.revokeObjectURL(url);
+        resolve({ dataUrl, converted: true });
+      } catch {
+        URL.revokeObjectURL(url);
+        resolve({ error: 'Conversion failed.' });
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ error: 'unsupported_format' });
+    };
+    img.src = url;
+  });
+}
+
 function ItemCard({ item }: { item: WardrobeItem }) {
   return (
     <article className="item-card">
@@ -60,6 +97,7 @@ export default function WardrobeView() {
 
   const [nameError, setNameError] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFormatError, setImageFormatError] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<WardrobeAIMetadata | null>(null);
   const [aiSuggestedFields, setAiSuggestedFields] = useState<Set<string>>(new Set());
@@ -74,6 +112,7 @@ export default function WardrobeView() {
   function resetForm() {
     formRef.current?.reset();
     setNameError('');
+    setImageFormatError('');
     setImagePreview(null);
     setAiSuggestions(null);
     setAiSuggestedFields(new Set());
@@ -88,10 +127,22 @@ export default function WardrobeView() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const dataUrl = await fileToDataURL(file);
-    setImagePreview(dataUrl);
+    setImageFormatError('');
     setAiSuggestions(null);
     setAiSuggestedFields(new Set());
+
+    // Convert unsupported formats (HEIC/HEIF etc.) to JPEG before analysis
+    const convResult = await toSupportedImageDataUrl(file);
+    if ('error' in convResult) {
+      setImageFormatError('Please upload a JPG, PNG, WEBP, or GIF for AI analysis. HEIC/HEIF files are not supported on this browser.');
+      // Still show a preview if the browser can render it
+      const fallbackUrl = await fileToDataURL(file);
+      setImagePreview(fallbackUrl);
+      return;
+    }
+
+    const dataUrl = convResult.dataUrl;
+    setImagePreview(dataUrl);
 
     // Kick off AI vision analysis
     setAnalyzing(true);
@@ -120,12 +171,13 @@ export default function WardrobeView() {
           setAiSuggestedFields(suggested);
         }
       } else if (res.status !== 401) {
-        // Non-auth errors: show generic failure note without crashing
+        const errData = await res.json().catch(() => ({})) as { _debug?: { fallbackReason?: string } };
+        const fallbackReason = (errData._debug?.fallbackReason as WardrobeAIMetadata['fallbackReason']) ?? 'openai_vision_error';
         setAiSuggestions({
           detectedCategory: 'Top', detectedColor: '', detectedStyle: '', detectedSeason: 'All',
           detectedOccasion: 'Business', confidence: 0, tags: [], analysisNote: '',
           providerRequested: 'unknown', provider: 'mock', model: 'mock',
-          fallbackUsed: true, fallbackReason: 'openai_vision_error', analyzedAt: new Date().toISOString(),
+          fallbackUsed: true, fallbackReason, analyzedAt: new Date().toISOString(),
         });
       }
     } catch {
@@ -214,8 +266,14 @@ export default function WardrobeView() {
 
           <label>
             Image
-            <input name="image" type="file" accept="image/*" onChange={handleImageChange} />
+            <input name="image" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif,image/heic,image/heif" onChange={handleImageChange} />
           </label>
+
+          {imageFormatError && (
+            <span style={{ color: 'var(--bad)', fontSize: 12, marginTop: -4, marginBottom: 4, display: 'block', lineHeight: 1.4 }}>
+              {imageFormatError}
+            </span>
+          )}
 
           {/* Image preview */}
           {imagePreview && (
