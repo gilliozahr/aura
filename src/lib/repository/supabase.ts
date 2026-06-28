@@ -394,6 +394,39 @@ export class SupabaseRepository implements IRepository {
     this.assertNoError(error, 'addWardrobeItem');
   }
 
+  async updateWardrobeItem(item: WardrobeItem): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client
+      .from('wardrobe_items')
+      .update({
+        name: item.name,
+        category: item.category,
+        color: item.color,
+        season: item.season,
+        occasion: item.occasion,
+        style: item.style,
+        wears: item.wears,
+        confidence: item.confidence,
+        image_url: item.image,
+        ai_metadata: item.aiMetadata ?? null,
+      })
+      .eq('id', item.id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'updateWardrobeItem');
+  }
+
+  async deleteWardrobeItem(id: string): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client
+      .from('wardrobe_items')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'deleteWardrobeItem');
+  }
+
   async setWardrobe(items: WardrobeItem[]): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;

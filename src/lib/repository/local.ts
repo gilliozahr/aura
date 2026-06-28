@@ -49,6 +49,16 @@ export class LocalRepository implements IRepository {
     this.write({ ...s, wardrobe: [...s.wardrobe, item] });
   }
 
+  async updateWardrobeItem(item: WardrobeItem): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, wardrobe: s.wardrobe.map(w => w.id === item.id ? item : w) });
+  }
+
+  async deleteWardrobeItem(id: string): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, wardrobe: s.wardrobe.filter(w => w.id !== id) });
+  }
+
   async setWardrobe(items: WardrobeItem[]): Promise<void> {
     this.write({ ...this.read(), wardrobe: items });
   }

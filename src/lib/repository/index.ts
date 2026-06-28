@@ -16,6 +16,8 @@ export interface IRepository {
   loadState(): Promise<AppState>;
   saveUser(user: UserProfile): Promise<void>;
   addWardrobeItem(item: WardrobeItem): Promise<void>;
+  updateWardrobeItem(item: WardrobeItem): Promise<void>;
+  deleteWardrobeItem(id: string): Promise<void>;
   setWardrobe(items: WardrobeItem[]): Promise<void>;
   addInspiration(item: InspirationItem): Promise<void>;
   addOrder(order: Order): Promise<void>;
