@@ -11,10 +11,61 @@ export interface WeatherContext {
 export interface UserProfile {
   name: string;
   city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
   temperature: number;
   occasion: string;
   styleGoal: string;
   budget: number;
+}
+
+export type LocationSource = 'browser' | 'profile' | 'fallback';
+
+export interface LocationContext {
+  city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  source: LocationSource;
+  label: string;
+  timestamp: string;
+}
+
+export type VisionFallbackReason =
+  | 'missing_openai_key'
+  | 'missing_anthropic_key'
+  | 'openai_http_401'
+  | 'openai_http_429'
+  | 'openai_http_error'
+  | 'openai_parse_error'
+  | 'openai_vision_error'
+  | 'anthropic_http_401'
+  | 'anthropic_http_429'
+  | 'anthropic_http_error'
+  | 'anthropic_parse_error'
+  | 'anthropic_vision_error'
+  | 'invalid_image_url'
+  | 'unsupported_image_format';
+
+export interface WardrobeAIMetadata {
+  detectedCategory: string;
+  detectedColor: string;
+  detectedStyle: string;
+  detectedSeason: string;
+  detectedOccasion: string;
+  confidence: number;
+  tags: string[];
+  analysisNote: string;
+  correctedFields?: string[];
+  /** The provider that was configured (e.g. 'openai', 'mock') */
+  providerRequested: string;
+  /** The provider that actually ran the analysis (may differ if fallback used) */
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+  fallbackReason?: VisionFallbackReason;
+  analyzedAt: string;
 }
 
 export interface WardrobeItem {
@@ -28,6 +79,7 @@ export interface WardrobeItem {
   wears: number;
   confidence: number;
   image: string;
+  aiMetadata?: WardrobeAIMetadata;
 }
 
 export interface ReportDebugMeta {

@@ -19,6 +19,9 @@ interface UserProfileRow {
   id: string;
   name: string;
   city: string;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   temperature: number;
   occasion: string;
   style_goal: string;
@@ -35,6 +38,7 @@ interface WardrobeRow {
   wears: number;
   confidence: number;
   image_url: string;
+  ai_metadata?: Record<string, unknown> | null;
 }
 interface InspirationRow {
   id: string;
@@ -144,6 +148,9 @@ export class SupabaseRepository implements IRepository {
       ? {
           name: profileRow.name,
           city: profileRow.city,
+          country: profileRow.country ?? undefined,
+          latitude: profileRow.latitude ?? undefined,
+          longitude: profileRow.longitude ?? undefined,
           temperature: profileRow.temperature,
           occasion: profileRow.occasion,
           styleGoal: profileRow.style_goal,
@@ -164,6 +171,7 @@ export class SupabaseRepository implements IRepository {
       wears: r.wears,
       confidence: r.confidence,
       image: r.image_url,
+      aiMetadata: r.ai_metadata as WardrobeItem['aiMetadata'] ?? undefined,
     }));
 
     const inspirations: InspirationItem[] = (
@@ -234,6 +242,9 @@ export class SupabaseRepository implements IRepository {
       id: uid,
       name: user.name,
       city: user.city,
+      country: user.country ?? null,
+      latitude: user.latitude ?? null,
+      longitude: user.longitude ?? null,
       temperature: user.temperature,
       occasion: user.occasion,
       style_goal: user.styleGoal,
@@ -257,6 +268,7 @@ export class SupabaseRepository implements IRepository {
       wears: item.wears,
       confidence: item.confidence,
       image_url: item.image,
+      ai_metadata: item.aiMetadata ?? null,
     });
     this.assertNoError(error, 'addWardrobeItem');
   }
@@ -280,6 +292,7 @@ export class SupabaseRepository implements IRepository {
         wears: item.wears,
         confidence: item.confidence,
         image_url: item.image,
+        ai_metadata: item.aiMetadata ?? null,
       }))
     );
     this.assertNoError(insErr, 'setWardrobe/insert');

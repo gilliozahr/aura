@@ -1,5 +1,5 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
+import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
 
 const NEUTRALS = new Set([
   'black', 'white', 'beige', 'grey', 'gray', 'navy', 'camel', 'cream',
@@ -184,5 +184,35 @@ export class MockAIAdapter implements AIAdapter {
         fallbackUsed: false,
       },
     };
+  }
+
+  /** Returns the mock base object synchronously — used by real adapters' fallback paths. */
+  analyzeWardrobeImageSync(
+    fallbackReason?: VisionFallbackReason,
+    providerRequested = 'mock'
+  ): WardrobeAIMetadata {
+    return {
+      detectedCategory: 'Top',
+      detectedColor: 'Navy',
+      detectedStyle: 'Smart Casual',
+      detectedSeason: 'All',
+      detectedOccasion: 'Smart Casual',
+      confidence: 50,
+      tags: ['mock', 'unanalyzed'],
+      analysisNote: fallbackReason
+        ? `Vision analysis unavailable (${fallbackReason}). Fields are suggestions only.`
+        : 'Mock vision analysis — connect a real AI provider for accurate results.',
+      providerRequested,
+      provider: 'mock',
+      model: 'mock',
+      fallbackUsed: fallbackReason !== undefined,
+      fallbackReason,
+      analyzedAt: new Date().toISOString(),
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async analyzeWardrobeImage(_input: VisionInput): Promise<WardrobeAIMetadata> {
+    return this.analyzeWardrobeImageSync();
   }
 }

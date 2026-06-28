@@ -10,6 +10,9 @@ create table if not exists public.user_profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   name        text not null default 'User',
   city        text not null default '',
+  country     text,
+  latitude    double precision,
+  longitude   double precision,
   temperature numeric not null default 25,
   occasion    text not null default '',
   style_goal  text not null default '',
@@ -36,6 +39,7 @@ create table if not exists public.wardrobe_items (
   wears       integer not null default 0,
   confidence  integer not null default 78,
   image_url   text not null default '',
+  ai_metadata jsonb,
   created_at  timestamptz not null default now()
 );
 

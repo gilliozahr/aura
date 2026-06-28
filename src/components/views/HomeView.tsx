@@ -5,7 +5,7 @@ import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid, scoreClass, isValidItemName } from '@/lib/utils';
 import { recommendationAgent } from '@aura/agents';
-import type { OutfitReport, SavedOutfit, WardrobeItem, WeatherContext } from '@/lib/types';
+import type { OutfitReport, SavedOutfit, WardrobeItem, WeatherContext, LocationContext } from '@/lib/types';
 
 // ── Score bar ─────────────────────────────────────────────────────────────────
 
@@ -97,6 +97,7 @@ export default function HomeView() {
   const greeting = firstName ? `${timeGreeting()}, ${firstName}.` : `${timeGreeting()}.`;
 
   const [weather, setWeather] = useState<WeatherContext | null>(null);
+  const [locationCtx, setLocationCtx] = useState<LocationContext | null>(null);
   const [outfitItems, setOutfitItems] = useState<WardrobeItem[]>([]);
   const [report, setReport] = useState<OutfitReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -109,33 +110,72 @@ export default function HomeView() {
   const hasFetched = useRef(false);
   const weatherFetched = useRef(false);
 
-  // Fetch real weather once on mount
+  // Fetch weather once on mount using location priority: browser → saved lat/lon → saved city → fallback
   useEffect(() => {
     if (weatherFetched.current) return;
     weatherFetched.current = true;
 
-    const city = state.user.city || 'Dubai';
+    const savedCity = state.user.city || 'Dubai';
+    const savedLat = state.user.latitude;
+    const savedLon = state.user.longitude;
+    const now = new Date().toISOString();
 
-    function fetchWeather(lat?: number, lon?: number) {
+    function applyWeather(w: WeatherContext, loc: LocationContext) {
+      setWeather(w);
+      setLocationCtx(loc);
+    }
+
+    async function fetchWeatherAndSet(lat: number | undefined, lon: number | undefined, loc: LocationContext) {
       const query = lat != null && lon != null
         ? `lat=${lat}&lon=${lon}`
-        : `city=${encodeURIComponent(city)}`;
-      fetch(`/api/weather/current?${query}`)
-        .then(r => r.json())
-        .then((w: WeatherContext) => setWeather(w))
-        .catch(() => {
-          setWeather({ city, temperatureC: 0, condition: 'Unavailable', available: false, timestamp: new Date().toISOString() });
-        });
+        : `city=${encodeURIComponent(loc.city)}`;
+      try {
+        const r = await fetch(`/api/weather/current?${query}`);
+        const w = (await r.json()) as WeatherContext;
+        applyWeather(w, { ...loc, city: w.city || loc.city });
+      } catch {
+        applyWeather(
+          { city: loc.city, temperatureC: 0, condition: 'Unavailable', available: false, timestamp: now },
+          loc
+        );
+      }
     }
 
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        pos => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-        () => fetchWeather(), // denied — use saved city
+        pos => {
+          const { latitude, longitude } = pos.coords;
+          fetchWeatherAndSet(latitude, longitude, {
+            city: savedCity, latitude, longitude,
+            source: 'browser', label: 'Using current location', timestamp: now,
+          });
+        },
+        () => {
+          // Denied — fall to saved lat/lon or city
+          if (savedLat != null && savedLon != null) {
+            fetchWeatherAndSet(savedLat, savedLon, {
+              city: savedCity, latitude: savedLat, longitude: savedLon,
+              source: 'profile', label: 'Using saved location', timestamp: now,
+            });
+          } else {
+            fetchWeatherAndSet(undefined, undefined, {
+              city: savedCity, source: savedCity !== 'Dubai' ? 'profile' : 'fallback',
+              label: savedCity !== 'Dubai' ? 'Using saved location' : 'Using default location', timestamp: now,
+            });
+          }
+        },
         { timeout: 5000 }
       );
+    } else if (savedLat != null && savedLon != null) {
+      fetchWeatherAndSet(savedLat, savedLon, {
+        city: savedCity, latitude: savedLat, longitude: savedLon,
+        source: 'profile', label: 'Using saved location', timestamp: now,
+      });
     } else {
-      fetchWeather();
+      fetchWeatherAndSet(undefined, undefined, {
+        city: savedCity, source: savedCity !== 'Dubai' ? 'profile' : 'fallback',
+        label: savedCity !== 'Dubai' ? 'Using saved location' : 'Using default location', timestamp: now,
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -264,6 +304,11 @@ export default function HomeView() {
             {' · '}
             {state.user.occasion || '—'}
           </p>
+          {locationCtx && (
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: -8, marginBottom: 8 }}>
+              {locationCtx.label}
+            </p>
+          )}
 
           {hasValidItems ? (
             <div className="recommendation">

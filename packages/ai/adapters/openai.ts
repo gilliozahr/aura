@@ -1,6 +1,6 @@
-import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
-import type { AIAdapter, InspirationInput, OutfitInput } from '../index';
-import { validateReport, validateOutfitReport } from '../validate';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext, WardrobeAIMetadata, VisionFallbackReason } from '@aura/types';
+import type { AIAdapter, InspirationInput, OutfitInput, VisionInput } from '../index';
+import { validateReport, validateOutfitReport, validateVisionReport } from '../validate';
 import { MockAIAdapter } from './mock';
 
 const MODEL = 'gpt-4o';
@@ -52,7 +52,11 @@ Return ONLY valid JSON, no markdown:
 
 function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext): string {
   const itemList = items
-    .map(i => `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`)
+    .map(i => {
+      const base = `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`;
+      if (i.aiMetadata?.tags?.length) return `${base} [AI tags: ${i.aiMetadata.tags.join(', ')}]`;
+      return base;
+    })
     .join('\n');
 
   const weatherLine = weather?.available
@@ -233,5 +237,113 @@ export class OpenAIAdapter implements AIAdapter {
         },
       };
     }
+  }
+
+  async analyzeWardrobeImage(input: VisionInput): Promise<WardrobeAIMetadata> {
+    const t0 = Date.now();
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    const mockFallback = (reason: VisionFallbackReason, latencyMs: number): WardrobeAIMetadata => {
+      console.warn('[OpenAIAdapter] analyzeWardrobeImage fallback', { reason, latencyMs });
+      return new MockAIAdapter().analyzeWardrobeImageSync(reason, 'openai');
+    };
+
+    if (!apiKey) {
+      return mockFallback('missing_openai_key', Date.now() - t0);
+    }
+
+    const prompt = `You are AURA, an AI wardrobe assistant. Analyze the clothing item in this image and classify it precisely.
+
+${input.nameHint ? `User label hint: "${input.nameHint}" — use this to resolve ambiguity but trust the image first.` : ''}
+
+CATEGORY RULES — choose exactly one:
+- Top: shirt, t-shirt, blouse, sweater, jumper, polo, tank top, hoodie, cardigan, knitwear
+- Bottom: jeans, trousers, pants, chinos, shorts, leggings, skirt, denim, joggers
+- Shoes: sneakers, loafers, boots, sandals, heels, trainers, oxfords
+- Outerwear: coat, jacket, blazer, parka, raincoat, overcoat, suit jacket
+- Dress: dress, gown, jumpsuit, playsuit, romper
+- Bag: handbag, backpack, tote, clutch, briefcase, duffel
+- Accessory: belt, scarf, hat, cap, sunglasses, tie, jewellery, watch, fragrance
+- Other: anything not clearly fitting above categories
+
+SEASON RULES:
+- Summer: lightweight fabrics, shorts, sandals, linen, visible skin
+- Winter: coat, heavy knit, boots, layers, wool
+- Spring/Autumn: transitional items, light jacket, medium weight
+- All: versatile basics that work year-round (most trousers, shirts, shoes)
+
+OCCASION RULES:
+- Business: formal suit, dress shirt, blazer, formal shoes
+- Smart Casual: chinos, polo, neat jeans, loafers — not gym/beach
+- Casual: t-shirt, jeans, sneakers, everyday wear
+- Evening: dress, cocktail attire, formal gown, smart heels
+- Travel: practical, comfortable, wrinkle-resistant
+
+COLOR: state the primary dominant color precisely (e.g. "Light Blue Denim", "Camel", "Charcoal Grey", "Olive Green").
+
+Return ONLY valid JSON, no markdown:
+{"detectedCategory":"<Top|Bottom|Shoes|Outerwear|Dress|Bag|Accessory|Other>","detectedColor":"<precise color>","detectedStyle":"<style aesthetic e.g. Smart Casual, Quiet Luxury, Streetwear, Classic>","detectedSeason":"<All|Summer|Winter|Spring|Autumn>","detectedOccasion":"<Business|Smart Casual|Casual|Evening|Travel>","confidence":<integer 0-100, lower if image is unclear>,"tags":["<tag1>","<tag2>","<tag3>"],"analysisNote":"<one sentence describing what you see>"}
+
+IMPORTANT: jeans and denim trousers must always be "Bottom", not "Top".`;
+
+    let res: Response;
+    try {
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                { type: 'image_url', image_url: { url: input.imageDataUrl, detail: 'low' } },
+              ],
+            },
+          ],
+          response_format: { type: 'json_object' },
+          max_tokens: 512,
+          temperature: 0.2,
+        }),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[OpenAIAdapter] analyzeWardrobeImage fetch error:', msg);
+      return mockFallback('openai_vision_error', Date.now() - t0);
+    }
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      const isFormatError = res.status === 400 && errBody.toLowerCase().includes('unsupported image');
+      const reason: VisionFallbackReason =
+        isFormatError ? 'unsupported_image_format'
+        : res.status === 401 ? 'openai_http_401'
+        : res.status === 429 ? 'openai_http_429'
+        : 'openai_http_error';
+      console.error('[OpenAIAdapter] analyzeWardrobeImage HTTP error', { status: res.status, reason, body: errBody.slice(0, 200) });
+      return mockFallback(reason, Date.now() - t0);
+    }
+
+    let parsed: unknown;
+    try {
+      const data = (await res.json()) as OpenAIResponse;
+      const text = data.choices?.[0]?.message?.content ?? '';
+      parsed = JSON.parse(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[OpenAIAdapter] analyzeWardrobeImage parse error:', msg);
+      return mockFallback('openai_parse_error', Date.now() - t0);
+    }
+
+    const latencyMs = Date.now() - t0;
+    console.info('[OpenAIAdapter] analyzeWardrobeImage success', { model: MODEL, latencyMs });
+
+    return validateVisionReport(parsed, {
+      providerRequested: 'openai',
+      provider: 'openai',
+      model: MODEL,
+      fallbackUsed: false,
+    });
   }
 }
