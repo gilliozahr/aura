@@ -6,6 +6,7 @@ import type {
   SavedOutfit,
   StyleDNAProfile,
   StylistBooking,
+  TripPlan,
   UserProfile,
   WardrobeItem,
 } from '@/lib/types';
@@ -22,6 +23,10 @@ export interface IRepository {
   addSavedOutfit(outfit: SavedOutfit): Promise<void>;
   incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void>;
   upsertStyleDNA(profile: StyleDNAProfile): Promise<void>;
+  getTripPlans(): Promise<TripPlan[]>;
+  saveTripPlan(plan: TripPlan): Promise<void>;
+  updateTripPlan(id: string, updates: Partial<TripPlan>): Promise<void>;
+  deleteTripPlan(id: string): Promise<void>;
   reset(): Promise<void>;
   uploadImage(
     file: File,

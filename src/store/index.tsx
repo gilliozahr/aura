@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { AppState, FeedbackEvent, InspirationItem, Order, SavedOutfit, StyleDNAProfile, StylistBooking, UserProfile, WardrobeItem } from '@/lib/types';
+import type { AppState, FeedbackEvent, InspirationItem, Order, SavedOutfit, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
 import { useToast } from './toast';
@@ -20,6 +20,10 @@ type Action =
   | { type: 'ADD_SAVED_OUTFIT'; payload: SavedOutfit }
   | { type: 'INCREMENT_WEARS'; itemIds: string[] }
   | { type: 'SET_STYLE_DNA'; payload: StyleDNAProfile }
+  | { type: 'SET_TRIP_PLANS'; payload: TripPlan[] }
+  | { type: 'ADD_TRIP_PLAN'; payload: TripPlan }
+  | { type: 'UPDATE_TRIP_PLAN'; id: string; updates: Partial<TripPlan> }
+  | { type: 'DELETE_TRIP_PLAN'; id: string }
   | { type: 'RESET' };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -51,6 +55,19 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'SET_STYLE_DNA':
       return { ...state, styleDNA: action.payload };
+    case 'SET_TRIP_PLANS':
+      return { ...state, tripPlans: action.payload };
+    case 'ADD_TRIP_PLAN':
+      return { ...state, tripPlans: [action.payload, ...(state.tripPlans ?? [])] };
+    case 'UPDATE_TRIP_PLAN':
+      return {
+        ...state,
+        tripPlans: (state.tripPlans ?? []).map(p =>
+          p.id === action.id ? { ...p, ...action.updates } : p
+        ),
+      };
+    case 'DELETE_TRIP_PLAN':
+      return { ...state, tripPlans: (state.tripPlans ?? []).filter(p => p.id !== action.id) };
     case 'RESET':
       return defaultState();
     default:
@@ -123,6 +140,15 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'SET_STYLE_DNA':
         persist(repo.upsertStyleDNA(action.payload));
+        break;
+      case 'ADD_TRIP_PLAN':
+        persist(repo.saveTripPlan(action.payload));
+        break;
+      case 'UPDATE_TRIP_PLAN':
+        persist(repo.updateTripPlan(action.id, action.updates));
+        break;
+      case 'DELETE_TRIP_PLAN':
+        persist(repo.deleteTripPlan(action.id));
         break;
       case 'RESET':
         persist(repo.reset());
