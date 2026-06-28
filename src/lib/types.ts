@@ -1,3 +1,13 @@
+export interface WeatherContext {
+  city: string;
+  temperatureC: number;
+  condition: string;
+  humidity?: number;
+  feelsLikeC?: number;
+  available: boolean;
+  timestamp: string;
+}
+
 export interface UserProfile {
   name: string;
   city: string;
@@ -77,10 +87,35 @@ export interface StylistBooking {
   status: string;
 }
 
+export interface OutfitReport {
+  outfitItems: string[]; // WardrobeItem IDs
+  compatibilityScore: number;
+  occasionFitScore: number;
+  weatherFitScore: number;
+  styleMatchScore: number;
+  colorHarmonyScore: number;
+  confidence: number;
+  reasoningSummary: string;
+  whyItWorks: string;
+  risks: string[];
+  missingItems: string[];
+  alternatives: string[];
+  _meta?: ReportDebugMeta;
+}
+
+export interface SavedOutfit {
+  id: string;
+  outfitItems: WardrobeItem[];
+  report: OutfitReport;
+  feedback?: 'accepted' | 'rejected';
+  createdAt: string;
+}
+
 export interface FeedbackEvent {
   id: string;
   type: string;
   score: number;
+  payload?: Record<string, unknown>;
   at: string;
 }
 
@@ -88,7 +123,7 @@ export interface AppState {
   user: UserProfile;
   wardrobe: WardrobeItem[];
   inspirations: InspirationItem[];
-  outfits: unknown[];
+  outfits: SavedOutfit[];
   orders: Order[];
   stylistBookings: StylistBooking[];
   feedback: FeedbackEvent[];

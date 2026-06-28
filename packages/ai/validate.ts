@@ -1,4 +1,4 @@
-import type { InspirationReport } from '@aura/types';
+import type { InspirationReport, OutfitReport } from '@aura/types';
 
 function clamp(n: unknown): number {
   const v = Number(n);
@@ -64,5 +64,36 @@ export function validateReport(raw: unknown): InspirationReport {
     betterAlternatives: toStrArray(r.betterAlternatives),
     missingWardrobeOpportunities: toStrArray(r.missingWardrobeOpportunities),
     _meta: r._meta as InspirationReport['_meta'],
+  };
+}
+
+/**
+ * Validates and normalises an AI outfit recommendation response.
+ * Never throws — always returns a usable OutfitReport.
+ */
+export function validateOutfitReport(raw: unknown): OutfitReport {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+
+  const compatibilityScore = Math.min(95, clamp(r.compatibilityScore));
+  const occasionFitScore = clamp(r.occasionFitScore);
+  const weatherFitScore = clamp(r.weatherFitScore);
+  const styleMatchScore = clamp(r.styleMatchScore);
+  const colorHarmonyScore = clamp(r.colorHarmonyScore);
+  const confidence = clamp(r.confidence ?? 72);
+
+  return {
+    outfitItems: toStrArray(r.outfitItems),
+    compatibilityScore,
+    occasionFitScore,
+    weatherFitScore,
+    styleMatchScore,
+    colorHarmonyScore,
+    confidence,
+    reasoningSummary: toStr(r.reasoningSummary, 'A well-composed outfit for your context.'),
+    whyItWorks: toStr(r.whyItWorks, ''),
+    risks: toStrArray(r.risks),
+    missingItems: toStrArray(r.missingItems),
+    alternatives: toStrArray(r.alternatives),
+    _meta: r._meta as OutfitReport['_meta'],
   };
 }

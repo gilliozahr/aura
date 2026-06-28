@@ -180,8 +180,15 @@ export default function InspirationView() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  // Track the result of the current submission independently of global store history
+  const [currentResult, setCurrentResult] = useState<InspirationItem | null>(null);
+  // Name being typed — used to clear stale result when the user changes the item
+  const [draftName, setDraftName] = useState('');
 
-  const lastInspiration = state.inspirations.at(-1);
+  function clearResult() {
+    setCurrentResult(null);
+    setAiError('');
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -201,7 +208,10 @@ export default function InspirationView() {
       return;
     }
 
+    // Clear any previous result immediately so it can't be shown during the new fetch
+    setCurrentResult(null);
     setLoading(true);
+
     const imageFile = form.get('image') as File | null;
 
     let image = '';
@@ -210,7 +220,8 @@ export default function InspirationView() {
       image = uploaded ?? await fileToDataURL(imageFile);
     }
 
-    const input = {
+    // Capture the exact submitted values — the report must match these
+    const submittedItem = {
       name,
       category: form.get('category') as string,
       color: (form.get('color') as string) || 'Neutral',
@@ -222,7 +233,7 @@ export default function InspirationView() {
       const res = await fetch('/api/ai/analyze-inspiration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item: input, context: { wardrobe: state.wardrobe, user: state.user } }),
+        body: JSON.stringify({ item: submittedItem, context: { wardrobe: state.wardrobe, user: state.user } }),
       });
 
       const data = (await res.json()) as { report?: InspirationReport; error?: string };
@@ -231,10 +242,18 @@ export default function InspirationView() {
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
 
-      dispatch({
-        type: 'ADD_INSPIRATION',
-        payload: { id: uid(), ...input, image, report: data.report, createdAt: new Date().toISOString() },
-      });
+      // Build the inspiration item using the submitted values as source of truth for name/category/color/style
+      const inspirationItem: InspirationItem = {
+        id: uid(),
+        ...submittedItem,
+        image,
+        report: data.report,
+        createdAt: new Date().toISOString(),
+      };
+
+      dispatch({ type: 'ADD_INSPIRATION', payload: inspirationItem });
+      // Show this exact item — not state.inspirations.at(-1) which could race
+      setCurrentResult(inspirationItem);
       toast(data.report._meta?.fallbackUsed ? 'Analysis complete (mock fallback used).' : 'AURA analysis complete.');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -252,16 +271,39 @@ export default function InspirationView() {
         <p className="eyebrow">AI Inspiration</p>
         <h2>I found this. Should I buy it?</h2>
         <form className="form" onSubmit={handleSubmit}>
-          <label>Item name <input name="name" required placeholder="Camel suede jacket" /></label>
+          <label>
+            Item name
+            <input
+              name="name"
+              required
+              placeholder="Camel suede jacket"
+              value={draftName}
+              onChange={e => {
+                setDraftName(e.target.value);
+                // Clear stale report whenever the item name changes
+                if (currentResult) clearResult();
+              }}
+            />
+          </label>
           <label>Category
-            <select name="category">
+            <select name="category" onChange={() => currentResult && clearResult()}>
               <option>Outerwear</option><option>Top</option><option>Bottom</option>
               <option>Shoes</option><option>Accessory</option><option>Watch</option><option>Fragrance</option>
             </select>
           </label>
           <label>Color <input name="color" placeholder="Camel" /></label>
           <label>Style <input name="style" placeholder="Quiet Luxury" /></label>
-          <label>Estimated price <input name="price" type="number" min="1" required placeholder="320" /></label>
+          <label>
+            Estimated price
+            <input
+              name="price"
+              type="number"
+              min="1"
+              required
+              placeholder="320"
+              onChange={() => currentResult && clearResult()}
+            />
+          </label>
           <label>Upload inspiration image <input name="image" type="file" accept="image/*" /></label>
           {aiError && (
             <p style={{ color: '#c0392b', fontSize: 13, background: '#fdf2f2', padding: '8px 12px', borderRadius: 8 }}>
@@ -274,10 +316,18 @@ export default function InspirationView() {
         </form>
       </div>
 
-      {/* Right: report */}
+      {/* Right: report — strictly tied to the current submission */}
       <div className="card" style={{ overflowY: 'auto', maxHeight: '85vh' }}>
-        {lastInspiration ? (
-          <InspirationReportCard item={lastInspiration} />
+        {loading ? (
+          <>
+            <p className="eyebrow">Compatibility Report</p>
+            <h2>{draftName || 'Analyzing…'}</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+              AURA is analyzing this item against your wardrobe and style profile…
+            </p>
+          </>
+        ) : currentResult ? (
+          <InspirationReportCard item={currentResult} />
         ) : (
           <>
             <p className="eyebrow">Decision Engine</p>

@@ -30,7 +30,13 @@ export default function SettingsView() {
       <p className="eyebrow">Settings</p>
       <h2>Style Context</h2>
       <form className="form" onSubmit={handleSubmit}>
-        <label>Name <input name="name" defaultValue={state.user.name} /></label>
+        <label>
+          Display Name
+          <input name="name" defaultValue={state.user.name} placeholder="e.g. Gillio" />
+          <span style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+            Shown in the Daily Briefing greeting
+          </span>
+        </label>
         <label>City <input name="city" defaultValue={state.user.city} /></label>
         <label>Temperature °C <input name="temperature" type="number" defaultValue={state.user.temperature} /></label>
         <label>Today&apos;s occasion <input name="occasion" defaultValue={state.user.occasion} /></label>

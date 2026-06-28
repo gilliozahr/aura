@@ -1,11 +1,11 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import { uid, fileToDataURL, isDataUrl } from '@/lib/utils';
+import { uid, fileToDataURL, isDataUrl, isValidItemName } from '@/lib/utils';
 import type { WardrobeItem } from '@/lib/types';
 
 function ItemCard({ item }: { item: WardrobeItem }) {
@@ -40,10 +40,19 @@ export default function WardrobeView() {
   const { state, dispatch, uploadImage } = useAura();
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
+  const [nameError, setNameError] = useState('');
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    const name = (form.get('name') as string).trim();
+
+    if (!isValidItemName(name)) {
+      setNameError("Please enter a real clothing item name, like 'Navy blazer' or 'White linen shirt'.");
+      return;
+    }
+    setNameError('');
+
     const imageFile = form.get('image') as File | null;
 
     // Try Supabase Storage first; fall back to base64 data URL
@@ -55,7 +64,7 @@ export default function WardrobeView() {
 
     const item: WardrobeItem = {
       id: uid(),
-      name: form.get('name') as string,
+      name,
       category: form.get('category') as string,
       color: (form.get('color') as string) || 'Neutral',
       season: form.get('season') as string,
@@ -76,7 +85,20 @@ export default function WardrobeView() {
         <p className="eyebrow">Add Item</p>
         <h2>Build your digital wardrobe</h2>
         <form className="form" ref={formRef} onSubmit={handleSubmit}>
-          <label>Name <input name="name" required placeholder="Navy blazer" /></label>
+          <label>
+            Name
+            <input
+              name="name"
+              required
+              placeholder="Navy blazer"
+              onChange={() => nameError && setNameError('')}
+            />
+            {nameError && (
+              <span style={{ color: 'var(--bad)', fontSize: 12, marginTop: 4, display: 'block', lineHeight: 1.4 }}>
+                {nameError}
+              </span>
+            )}
+          </label>
           <label>Category
             <select name="category">
               <option>Top</option><option>Bottom</option><option>Shoes</option>

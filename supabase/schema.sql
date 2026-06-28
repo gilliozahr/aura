@@ -90,11 +90,25 @@ create table if not exists public.feedback_events (
   user_id     uuid not null references auth.users(id) on delete cascade,
   type        text not null,
   score       integer not null default 0,
+  payload     jsonb,
   created_at  timestamptz not null default now()
 );
 
 alter table public.feedback_events enable row level security;
 create policy "Users own their feedback" on public.feedback_events for all using (auth.uid() = user_id);
+
+-- ─── saved_outfits ─────────────────────────────────────────────────────────────
+create table if not exists public.saved_outfits (
+  id           uuid primary key default uuid_generate_v4(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  outfit_items jsonb not null default '[]',
+  report       jsonb not null default '{}',
+  feedback     text,
+  created_at   timestamptz not null default now()
+);
+
+alter table public.saved_outfits enable row level security;
+create policy "Users own their saved outfits" on public.saved_outfits for all using (auth.uid() = user_id);
 
 -- ─── Storage buckets ───────────────────────────────────────────────────────────
 -- Create these in the Supabase dashboard > Storage, or via CLI:

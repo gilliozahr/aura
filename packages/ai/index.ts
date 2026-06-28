@@ -1,4 +1,4 @@
-import type { InspirationReport, WardrobeItem, UserProfile } from '@aura/types';
+import type { InspirationReport, OutfitReport, WardrobeItem, UserProfile, WeatherContext } from '@aura/types';
 
 export interface InspirationInput {
   name: string;
@@ -8,14 +8,22 @@ export interface InspirationInput {
   price: number;
 }
 
+export interface OutfitInput {
+  items: WardrobeItem[];
+  user: UserProfile;
+  wardrobe: WardrobeItem[];
+  weather?: WeatherContext;
+}
+
 export interface AIAdapter {
   analyzeInspiration(
     item: InspirationInput,
     context: { wardrobe: WardrobeItem[]; user: UserProfile }
   ): Promise<InspirationReport>;
+  analyzeOutfit(input: OutfitInput): Promise<OutfitReport>;
 }
 
-export { validateReport } from './validate';
+export { validateReport, validateOutfitReport } from './validate';
 export { MockAIAdapter } from './adapters/mock';
 export { OpenAIAdapter } from './adapters/openai';
 export { AnthropicAdapter } from './adapters/anthropic';

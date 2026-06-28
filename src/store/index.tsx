@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { AppState, FeedbackEvent, InspirationItem, Order, StylistBooking, UserProfile, WardrobeItem } from '@/lib/types';
+import type { AppState, FeedbackEvent, InspirationItem, Order, SavedOutfit, StylistBooking, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
 import { useToast } from './toast';
@@ -17,6 +17,7 @@ type Action =
   | { type: 'ADD_ORDER'; payload: Order }
   | { type: 'ADD_STYLIST_BOOKING'; payload: StylistBooking }
   | { type: 'ADD_FEEDBACK'; payload: FeedbackEvent }
+  | { type: 'ADD_SAVED_OUTFIT'; payload: SavedOutfit }
   | { type: 'INCREMENT_WEARS'; itemIds: string[] }
   | { type: 'RESET' };
 
@@ -38,6 +39,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, stylistBookings: [...state.stylistBookings, action.payload] };
     case 'ADD_FEEDBACK':
       return { ...state, feedback: [...state.feedback, action.payload] };
+    case 'ADD_SAVED_OUTFIT':
+      return { ...state, outfits: [action.payload, ...state.outfits] };
     case 'INCREMENT_WEARS':
       return {
         ...state,
@@ -67,26 +70,17 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Recreate repo when the authenticated user changes (sign in / sign out).
-  // isSupabaseConfigured is a module-level constant so it only changes once.
   const repo: IRepository = useMemo(
     () => (isSupabaseConfigured ? new SupabaseRepository() : new LocalRepository()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isSupabaseConfigured, user?.id]
   );
 
-  // Wait for auth to fully resolve before loading state.
-  // Without this guard, the first loadState() call races against AuthProvider's
-  // getUser() call. If the first call's getUser() returns null (stale context)
-  // and completes after the second call has already hydrated with real data,
-  // it overwrites the real data with defaultState().
   useEffect(() => {
     if (loading) return;
     repo.loadState().then(loaded => dispatch({ type: 'HYDRATE', payload: loaded }));
   }, [repo, loading]);
 
-  // Targeted persistence: each dispatch syncs only the affected record.
-  // Errors are both logged and surfaced as toasts so the user knows a save failed.
   const syncAction = useCallback((action: Action) => {
     const s = stateRef.current;
     const persist = (p: Promise<void>) =>
@@ -117,6 +111,9 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'ADD_FEEDBACK':
         persist(repo.addFeedback(action.payload));
+        break;
+      case 'ADD_SAVED_OUTFIT':
+        persist(repo.addSavedOutfit(action.payload));
         break;
       case 'INCREMENT_WEARS':
         persist(repo.incrementWears(action.itemIds, s.wardrobe));

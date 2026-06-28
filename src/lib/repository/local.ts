@@ -3,6 +3,7 @@ import type {
   FeedbackEvent,
   InspirationItem,
   Order,
+  SavedOutfit,
   StylistBooking,
   UserProfile,
   WardrobeItem,
@@ -67,6 +68,11 @@ export class LocalRepository implements IRepository {
   async addFeedback(event: FeedbackEvent): Promise<void> {
     const s = this.read();
     this.write({ ...s, feedback: [...s.feedback, event] });
+  }
+
+  async addSavedOutfit(outfit: SavedOutfit): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, outfits: [...s.outfits, outfit] });
   }
 
   async incrementWears(itemIds: string[], currentWardrobe: WardrobeItem[]): Promise<void> {

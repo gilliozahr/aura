@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import type { View } from '@/lib/types';
-import { AuthProvider } from '@/store/auth';
+import { AuthProvider, useAuth } from '@/store/auth';
 import { AuraProvider } from '@/store';
 import { ToastProvider } from '@/store/toast';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
 import Toast from '@/components/layout/Toast';
+import AuthLanding from '@/components/auth/AuthLanding';
 import HomeView from '@/components/views/HomeView';
 import WardrobeView from '@/components/views/WardrobeView';
 import InspirationView from '@/components/views/InspirationView';
@@ -18,6 +19,20 @@ import SettingsView from '@/components/views/SettingsView';
 
 function AuraApp() {
   const [activeView, setActiveView] = useState<View>('home');
+  const { user, loading, isSupabaseConfigured } = useAuth();
+
+  if (isSupabaseConfigured && loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-brand-mark">A</div>
+        <p className="loading-text">Loading AURA…</p>
+      </div>
+    );
+  }
+
+  if (isSupabaseConfigured && !user) {
+    return <AuthLanding />;
+  }
 
   return (
     <div className="app-shell">
