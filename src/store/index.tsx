@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { AppState, FeedbackEvent, InspirationItem, OccasionEvent, Order, SavedOutfit, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
+import type { AppState, FeedbackEvent, InspirationItem, OccasionEvent, Order, SavedOutfit, ShoppingProduct, ShoppingRecommendation, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
 import { useToast } from './toast';
@@ -30,6 +30,11 @@ type Action =
   | { type: 'ADD_OCCASION_EVENT'; payload: OccasionEvent }
   | { type: 'UPDATE_OCCASION_EVENT'; id: string; updates: Partial<OccasionEvent> }
   | { type: 'DELETE_OCCASION_EVENT'; id: string }
+  | { type: 'SET_SHOPPING_PRODUCTS'; payload: ShoppingProduct[] }
+  | { type: 'ADD_SHOPPING_PRODUCT'; payload: ShoppingProduct }
+  | { type: 'DELETE_SHOPPING_PRODUCT'; id: string }
+  | { type: 'SET_SHOPPING_RECOMMENDATIONS'; payload: ShoppingRecommendation[] }
+  | { type: 'ADD_SHOPPING_RECOMMENDATION'; payload: ShoppingRecommendation }
   | { type: 'RESET' };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -91,6 +96,16 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'DELETE_OCCASION_EVENT':
       return { ...state, occasionEvents: (state.occasionEvents ?? []).filter(e => e.id !== action.id) };
+    case 'SET_SHOPPING_PRODUCTS':
+      return { ...state, shoppingProducts: action.payload };
+    case 'ADD_SHOPPING_PRODUCT':
+      return { ...state, shoppingProducts: [action.payload, ...(state.shoppingProducts ?? []).filter(p => p.id !== action.payload.id)] };
+    case 'DELETE_SHOPPING_PRODUCT':
+      return { ...state, shoppingProducts: (state.shoppingProducts ?? []).filter(p => p.id !== action.id) };
+    case 'SET_SHOPPING_RECOMMENDATIONS':
+      return { ...state, shoppingRecommendations: action.payload };
+    case 'ADD_SHOPPING_RECOMMENDATION':
+      return { ...state, shoppingRecommendations: [action.payload, ...(state.shoppingRecommendations ?? []).filter(r => r.id !== action.payload.id)] };
     case 'RESET':
       return defaultState();
     default:
@@ -187,6 +202,15 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'DELETE_OCCASION_EVENT':
         persist(repo.deleteOccasionEvent(action.id));
+        break;
+      case 'ADD_SHOPPING_PRODUCT':
+        persist(repo.saveShoppingProduct(action.payload));
+        break;
+      case 'DELETE_SHOPPING_PRODUCT':
+        persist(repo.deleteShoppingProduct(action.id));
+        break;
+      case 'ADD_SHOPPING_RECOMMENDATION':
+        persist(repo.saveShoppingRecommendation(action.payload));
         break;
       case 'RESET':
         persist(repo.reset());

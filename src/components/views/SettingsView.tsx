@@ -5,7 +5,7 @@ import type { FormEvent } from 'react';
 import { useAura } from '@/store';
 import { AURA_VERSION, AURA_RELEASE_NOTES } from '@/lib/version';
 import { useToast } from '@/store/toast';
-import type { StyleDNAProfile, WeatherContext } from '@/lib/types';
+import type { PreferredFit, StyleDNAProfile, UserSizeProfile, WeatherContext } from '@/lib/types';
 
 export default function SettingsView() {
   const { state, dispatch } = useAura();
@@ -165,6 +165,70 @@ export default function SettingsView() {
         >
           {dnaLoading ? 'Computing…' : 'Recompute Style DNA'}
         </button>
+      </div>
+
+      {/* Size Profile */}
+      <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 24 }}>
+        <p className="eyebrow">Size Profile</p>
+        <h3 style={{ marginBottom: 4 }}>Your Measurements</h3>
+        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+          Used only to improve fit recommendations in the Shopping Advisor. All fields are optional and never shared.
+        </p>
+        <form
+          className="form"
+          onSubmit={(e: FormEvent<HTMLFormElement>) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const num = (key: string) => { const v = (f.get(key) as string).trim(); return v ? parseFloat(v) : undefined; };
+            const str = (key: string) => { const v = (f.get(key) as string).trim(); return v || undefined; };
+            const sizeProfile: UserSizeProfile = {
+              heightCm: num('heightCm'),
+              weightKg: num('weightKg'),
+              chestCm: num('chestCm'),
+              waistCm: num('waistCm'),
+              hipsCm: num('hipsCm'),
+              shoeSizeEU: num('shoeSizeEU'),
+              preferredFit: (str('preferredFit') as PreferredFit | undefined),
+              topSize: str('topSize'),
+              bottomSize: str('bottomSize'),
+              blazerSize: str('blazerSize'),
+              notes: str('sizeNotes'),
+            };
+            dispatch({ type: 'SET_USER', payload: { ...state.user, sizeProfile } });
+            toast('Size profile saved.');
+          }}
+        >
+          <div className="grid two">
+            <label>Height (cm) <input name="heightCm" type="number" min="100" max="250" defaultValue={state.user.sizeProfile?.heightCm ?? ''} placeholder="e.g. 178" /></label>
+            <label>Weight (kg) <input name="weightKg" type="number" min="30" max="300" defaultValue={state.user.sizeProfile?.weightKg ?? ''} placeholder="e.g. 75" /></label>
+          </div>
+          <div className="grid two">
+            <label>Chest (cm) <input name="chestCm" type="number" min="50" max="200" defaultValue={state.user.sizeProfile?.chestCm ?? ''} placeholder="e.g. 96" /></label>
+            <label>Waist (cm) <input name="waistCm" type="number" min="50" max="200" defaultValue={state.user.sizeProfile?.waistCm ?? ''} placeholder="e.g. 82" /></label>
+          </div>
+          <div className="grid two">
+            <label>Hips (cm) <input name="hipsCm" type="number" min="50" max="200" defaultValue={state.user.sizeProfile?.hipsCm ?? ''} placeholder="e.g. 95" /></label>
+            <label>Shoe size EU <input name="shoeSizeEU" type="number" min="30" max="55" defaultValue={state.user.sizeProfile?.shoeSizeEU ?? ''} placeholder="e.g. 43" /></label>
+          </div>
+          <div className="grid two">
+            <label>
+              Preferred fit
+              <select name="preferredFit" defaultValue={state.user.sizeProfile?.preferredFit ?? ''}>
+                <option value="">Select…</option>
+                {(['Slim', 'Regular', 'Relaxed', 'Oversized'] as PreferredFit[]).map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </label>
+            <label>Top size <input name="topSize" placeholder="e.g. M or 38" defaultValue={state.user.sizeProfile?.topSize ?? ''} /></label>
+          </div>
+          <div className="grid two">
+            <label>Bottom size <input name="bottomSize" placeholder="e.g. 32×32" defaultValue={state.user.sizeProfile?.bottomSize ?? ''} /></label>
+            <label>Blazer / jacket size <input name="blazerSize" placeholder="e.g. 48 or L" defaultValue={state.user.sizeProfile?.blazerSize ?? ''} /></label>
+          </div>
+          <label>Notes <textarea name="sizeNotes" placeholder="e.g. Long arms, broad shoulders" defaultValue={state.user.sizeProfile?.notes ?? ''} style={{ minHeight: 60 }} /></label>
+          <button className="primary" type="submit">Save Size Profile</button>
+        </form>
       </div>
 
       {/* Release */}

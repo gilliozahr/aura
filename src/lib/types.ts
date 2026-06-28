@@ -8,6 +8,30 @@ export interface WeatherContext {
   timestamp: string;
 }
 
+// ── Size profile ──────────────────────────────────────────────────────────────
+
+export type PreferredFit = 'Slim' | 'Regular' | 'Relaxed' | 'Oversized';
+
+export interface UserSizeProfile {
+  heightCm?: number;
+  weightKg?: number;
+  chestCm?: number;
+  waistCm?: number;
+  hipsCm?: number;
+  shoulderCm?: number;
+  inseamCm?: number;
+  neckCm?: number;
+  sleeveCm?: number;
+  shoeSizeEU?: number;
+  shoeSizeUK?: number;
+  shoeSizeUS?: number;
+  preferredFit?: PreferredFit;
+  topSize?: string;
+  bottomSize?: string;
+  blazerSize?: string;
+  notes?: string;
+}
+
 export interface UserProfile {
   name: string;
   city: string;
@@ -18,6 +42,7 @@ export interface UserProfile {
   occasion: string;
   styleGoal: string;
   budget: number;
+  sizeProfile?: UserSizeProfile;
 }
 
 export type LocationSource = 'browser' | 'profile' | 'fallback';
@@ -337,6 +362,68 @@ export interface WeeklyOccasionBrief {
   summary: string;
 }
 
+// ── Shopping Link Intelligence (v1.2) ─────────────────────────────────────
+
+export type ShoppingDecision = 'Buy' | 'Wait' | 'Skip';
+
+export type ShoppingExtractionSource =
+  | 'metadata'
+  | 'open_graph'
+  | 'json_ld'
+  | 'manual'
+  | 'screenshot';
+
+export type ShoppingExtractionStatus =
+  | 'success'
+  | 'partial'
+  | 'manual_required'
+  | 'blocked'
+  | 'error';
+
+export interface ShoppingProduct {
+  id: string;
+  url: string;
+  title?: string;
+  brand?: string;
+  price?: number;
+  currency?: string;
+  category?: string;
+  color?: string;
+  material?: string;
+  description?: string;
+  imageUrls: string[];
+  availableSizes: string[];
+  sizeGuide: Record<string, unknown>;
+  extractedAt?: string;
+  extractionSource?: ShoppingExtractionSource;
+  extractionStatus?: ShoppingExtractionStatus;
+  createdAt: string;
+}
+
+export interface ShoppingRecommendation {
+  id: string;
+  productId: string;
+  decision: ShoppingDecision;
+  confidenceScore: number;
+  wardrobeMatchScore: number;
+  styleDNAFitScore: number;
+  sizeFitScore: number;
+  duplicateRiskScore: number;
+  occasionUsefulnessScore: number;
+  tripUsefulnessScore: number;
+  reasoning: string;
+  risks: string[];
+  sizeNotes?: string;
+  wardrobeMatches: string[];
+  outfitIdeas: string[];
+  missingGapMatch: { gap?: string; relevant?: boolean };
+  alternatives: string[];
+  aiEnhanced?: boolean;
+  createdAt: string;
+}
+
+// ── App State ─────────────────────────────────────────────────────────────────
+
 export interface AppState {
   user: UserProfile;
   wardrobe: WardrobeItem[];
@@ -348,12 +435,15 @@ export interface AppState {
   styleDNA?: StyleDNAProfile;
   tripPlans: TripPlan[];
   occasionEvents: OccasionEvent[];
+  shoppingProducts: ShoppingProduct[];
+  shoppingRecommendations: ShoppingRecommendation[];
 }
 
 export type View =
   | 'home'
   | 'wardrobe'
   | 'inspiration'
+  | 'shopping'
   | 'packing'
   | 'occasions'
   | 'stylist'

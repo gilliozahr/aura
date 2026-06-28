@@ -17,6 +17,7 @@ import OccasionsView from '@/components/views/OccasionsView';
 import StylistView from '@/components/views/StylistView';
 import AnalyticsView from '@/components/views/AnalyticsView';
 import SettingsView from '@/components/views/SettingsView';
+import ShoppingView from '@/components/views/ShoppingView';
 
 function AuraApp() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -47,6 +48,7 @@ function AuraApp() {
         {activeView === 'occasions' && <OccasionsView />}
         {activeView === 'stylist' && <StylistView />}
         {activeView === 'analytics' && <AnalyticsView />}
+        {activeView === 'shopping' && <ShoppingView />}
         {activeView === 'settings' && <SettingsView />}
       </main>
     </div>
