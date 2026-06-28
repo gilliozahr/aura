@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useAura } from '@/store';
 import type { TripPlan, PackingItem } from '@/lib/types';
 
@@ -38,28 +38,26 @@ function sortedCategories(groups: Record<string, PackingItem[]>): string[] {
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
+const PRIORITY_STYLES: Record<PackingItem['priority'], React.CSSProperties> = {
+  essential: { background: 'rgba(180,160,120,0.15)', color: '#8a7440', border: '1px solid rgba(180,160,120,0.3)' },
+  recommended: { background: 'rgba(100,120,160,0.12)', color: '#4a5a7a', border: '1px solid rgba(100,120,160,0.25)' },
+  optional: { background: 'rgba(140,140,140,0.1)', color: '#7a7a7a', border: '1px solid rgba(140,140,140,0.2)' },
+};
+
 function PriorityChip({ priority }: { priority: PackingItem['priority'] }) {
-  const styles: Record<string, string> = {
-    essential: 'background: rgba(180,160,120,0.15); color: #8a7440; border: 1px solid rgba(180,160,120,0.3)',
-    recommended: 'background: rgba(100,120,160,0.12); color: #4a5a7a; border: 1px solid rgba(100,120,160,0.25)',
-    optional: 'background: rgba(140,140,140,0.1); color: #7a7a7a; border: 1px solid rgba(140,140,140,0.2)',
-  };
   return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: '999px',
-        fontSize: '0.65rem',
-        letterSpacing: '0.04em',
-        textTransform: 'uppercase',
-        fontWeight: 600,
-        ...Object.fromEntries(styles[priority].split(';').filter(Boolean).map(s => {
-          const [k, v] = s.split(':');
-          return [k.trim().replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase()), v.trim()];
-        })),
-      }}
-    >
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: 999,
+      fontSize: '0.65rem',
+      letterSpacing: '0.04em',
+      textTransform: 'uppercase',
+      fontWeight: 600,
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
+      ...PRIORITY_STYLES[priority],
+    }}>
       {priority}
     </span>
   );
@@ -124,40 +122,47 @@ function PackingChecklist({
           <p style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: '0.5rem' }}>
             {cat}
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             {groups[cat].map(item => (
               <label
                 key={item.id}
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.75rem',
+                  alignItems: 'center',
+                  gap: '0.625rem',
                   cursor: 'pointer',
-                  padding: '0.5rem 0.75rem',
+                  padding: '0.5rem 0.625rem',
                   borderRadius: '8px',
                   background: item.packed ? 'rgba(140,140,140,0.06)' : 'transparent',
                   transition: 'background 0.15s',
+                  width: '100%',
+                  boxSizing: 'border-box',
                 }}
               >
                 <input
                   type="checkbox"
                   checked={item.packed}
                   onChange={() => onTogglePacked(item.id)}
-                  style={{ marginTop: '0.15rem', accentColor: 'var(--foreground)', flexShrink: 0 }}
+                  style={{ accentColor: 'var(--foreground)', flexShrink: 0, width: 15, height: 15 }}
                 />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{
-                    fontWeight: 500,
-                    textDecoration: item.packed ? 'line-through' : 'none',
-                    color: item.packed ? 'var(--muted)' : 'var(--foreground)',
-                    fontSize: '0.875rem',
-                  }}>
-                    {item.name}
-                  </span>
+                <span style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 500,
+                  fontSize: '0.875rem',
+                  textDecoration: item.packed ? 'line-through' : 'none',
+                  color: item.packed ? 'var(--muted)' : 'var(--foreground)',
+                }}>
+                  {item.name}
                   {item.reason && (
-                    <p style={{ color: 'var(--muted)', fontSize: '0.75rem', marginTop: '0.1rem' }}>{item.reason}</p>
+                    <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '0.75rem', marginLeft: '0.4rem' }}>
+                      — {item.reason}
+                    </span>
                   )}
-                </div>
+                </span>
                 <PriorityChip priority={item.priority} />
               </label>
             ))}

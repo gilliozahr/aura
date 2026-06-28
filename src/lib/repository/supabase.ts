@@ -505,7 +505,7 @@ export class SupabaseRepository implements IRepository {
   async saveTripPlan(plan: TripPlan): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
-    const { error } = await this.client.from('trip_plans').insert({
+    const { error } = await this.client.from('trip_plans').upsert({
       id: plan.id,
       user_id: uid,
       destination_city: plan.destinationCity,

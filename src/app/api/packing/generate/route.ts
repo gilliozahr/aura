@@ -51,9 +51,6 @@ interface StyleDNARow {
   last_computed_at: string;
 }
 
-function simpleId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-}
 
 async function fetchWeather(city: string, baseUrl: string): Promise<TravelWeather | undefined> {
   try {
@@ -270,15 +267,15 @@ export async function POST(request: NextRequest) {
     // Ensure packed: false on all packing items (AI might not set it)
     const packingItems: PackingItem[] = (finalPlan.packingItems ?? []).map((item: PackingItem) => ({
       ...item,
-      id: item.id ?? simpleId(),
+      id: item.id ?? crypto.randomUUID(),
       packed: false,
       quantity: item.quantity ?? 1,
     }));
 
     const missingItems: MissingItem[] = finalPlan.missingItems ?? [];
 
-    // Save to Supabase
-    const planId = simpleId();
+    // Save to Supabase — omit id so Supabase generates a valid UUID, then read it back
+    const planId = crypto.randomUUID();
     const now = new Date().toISOString();
     const { error: insertError } = await supabase.from('trip_plans').insert({
       id: planId,

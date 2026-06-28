@@ -11,7 +11,7 @@ import type {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function simpleId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  return crypto.randomUUID();
 }
 
 function tripDays(startDate: string, endDate: string): number {
