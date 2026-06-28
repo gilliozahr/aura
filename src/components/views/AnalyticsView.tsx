@@ -183,60 +183,146 @@ export default function AnalyticsView() {
       {state.styleDNA && state.styleDNA.confidenceScore > 0 && (
         <div className="card" style={{ marginTop: 0 }}>
           <p className="eyebrow">Style DNA</p>
-          <h2>Your Personal Style Memory</h2>
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-            Confidence: <strong>{state.styleDNA.confidenceScore}/100</strong> · {state.styleDNA.signalCount} signals processed
+          <h2 style={{ marginBottom: 6 }}>Your Personal Style Memory</h2>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.5 }}>
+            AURA learns from your wardrobe, outfit feedback, and inspiration decisions.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+
+          {/* Confidence bar */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>Confidence</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{state.styleDNA.confidenceScore}/100 · {state.styleDNA.signalCount} signals</span>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: 'var(--surface)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${state.styleDNA.confidenceScore}%`,
+                background: 'var(--accent)',
+                borderRadius: 2,
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
+          </div>
+
+          {/* Chip groups */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {state.styleDNA.preferredColors.slice(0, 5).length > 0 && (
-              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Preferred Colors</div>
-                {state.styleDNA.preferredColors.slice(0, 5).map(e => (
-                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
-                ))}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Preferred Colors</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {state.styleDNA.preferredColors.slice(0, 5).map(e => (
+                    <span key={e.value} style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textTransform: 'capitalize',
+                      background: 'var(--surface)',
+                      color: 'var(--foreground)',
+                      border: '1px solid var(--border)',
+                    }}>{e.value}</span>
+                  ))}
+                </div>
               </div>
             )}
+
             {state.styleDNA.preferredStyleTags.slice(0, 5).length > 0 && (
-              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Style Tags</div>
-                {state.styleDNA.preferredStyleTags.slice(0, 5).map(e => (
-                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
-                ))}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Style Tags</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {state.styleDNA.preferredStyleTags.slice(0, 5).map(e => (
+                    <span key={e.value} style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textTransform: 'capitalize',
+                      background: 'var(--surface)',
+                      color: 'var(--foreground)',
+                      border: '1px solid var(--border)',
+                    }}>{e.value}</span>
+                  ))}
+                </div>
               </div>
             )}
+
             {state.styleDNA.preferredOccasions.slice(0, 3).length > 0 && (
-              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Occasions</div>
-                {state.styleDNA.preferredOccasions.slice(0, 3).map(e => (
-                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
-                ))}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Occasions</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {state.styleDNA.preferredOccasions.slice(0, 3).map(e => (
+                    <span key={e.value} style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textTransform: 'capitalize',
+                      background: 'var(--surface)',
+                      color: 'var(--foreground)',
+                      border: '1px solid var(--border)',
+                    }}>{e.value}</span>
+                  ))}
+                </div>
               </div>
             )}
-            {state.styleDNA.wardrobeGaps.length > 0 && (
-              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Wardrobe Gaps</div>
-                {state.styleDNA.wardrobeGaps.map(g => (
-                  <div key={g} style={{ fontSize: 13 }}>{g}</div>
-                ))}
-              </div>
-            )}
+
             {state.styleDNA.avoidedStyleTags.slice(0, 3).length > 0 && (
-              <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Styles to Avoid</div>
-                {state.styleDNA.avoidedStyleTags.slice(0, 3).map(e => (
-                  <div key={e.value} style={{ fontSize: 13, textTransform: 'capitalize' }}>{e.value}</div>
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Styles to Avoid</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {state.styleDNA.avoidedStyleTags.slice(0, 3).map(e => (
+                    <span key={e.value} style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textTransform: 'capitalize',
+                      background: 'transparent',
+                      color: 'var(--muted)',
+                      border: '1px solid var(--border)',
+                    }}>{e.value}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {state.styleDNA.wardrobeGaps.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Wardrobe Gaps</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {state.styleDNA.wardrobeGaps.map(g => (
+                    <span key={g} style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      background: 'transparent',
+                      color: 'var(--muted)',
+                      border: '1px dashed var(--border)',
+                    }}>{g}</span>
+                  ))}
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+                  Consider adding these categories to unlock richer outfit recommendations.
+                </p>
+              </div>
+            )}
+
+            {state.styleDNA.favoriteOutfitPatterns.slice(0, 3).length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>Favorite Outfit Patterns</div>
+                {state.styleDNA.favoriteOutfitPatterns.slice(0, 3).map(p => (
+                  <div key={p} style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, paddingLeft: 2 }}>· {p}</div>
                 ))}
               </div>
             )}
           </div>
-          {state.styleDNA.favoriteOutfitPatterns.slice(0, 3).length > 0 && (
-            <>
-              <p className="eyebrow" style={{ marginBottom: 6 }}>Favorite Outfit Patterns</p>
-              {state.styleDNA.favoriteOutfitPatterns.slice(0, 3).map(p => (
-                <div key={p} style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 3 }}>· {p}</div>
-              ))}
-            </>
-          )}
         </div>
       )}
     </>
