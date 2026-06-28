@@ -1,11 +1,10 @@
-export const AURA_VERSION = 'v1.0.0 Preview';
+export const AURA_VERSION = 'v1.1.0 Preview';
 
 export const AURA_RELEASE_NOTES = [
-  'MVP hardening + investor demo mode',
-  'Onboarding checklist on Daily Briefing',
-  'Polished empty states across all views',
-  'Stylist Concierge placeholder (coming next)',
-  'Richer demo data — wardrobe, trip, occasions',
-  'Mobile responsiveness pass',
-  'Production safety pass',
+  'Landing page polish — clear product narrative',
+  'Investor demo journey on Daily Briefing',
+  'Onboarding checklist with progress bar',
+  'App copy refinement across all views',
+  'README and investor demo script',
+  'Mobile and accessibility polish',
 ];

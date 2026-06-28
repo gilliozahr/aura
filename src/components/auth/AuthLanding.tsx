@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useAuth } from '@/store/auth';
 
 const BENEFITS = [
-  'AI outfit recommendations, scored and explained',
-  'Wardrobe intelligence and gap analysis',
-  'Buy / Wait / Skip decisions on new pieces',
+  'Understands your wardrobe from photos',
+  'Recommends outfits for your weather and occasions',
+  'Builds your personal Style DNA over time',
+  'Plans trips and generates smart packing lists',
+  'Prepares outfits for upcoming events',
 ];
 
 export default function AuthLanding() {
@@ -41,15 +43,14 @@ export default function AuthLanding() {
           <div className="brand-mark">A</div>
           <div>
             <strong>AURA</strong>
-            <span>Style Intelligence OS</span>
+            <span>AI Personal Style OS</span>
           </div>
         </div>
 
         <div className="auth-tagline">
-          <h2>Your wardrobe,<br />intelligently<br />styled.</h2>
+          <h2>Your wardrobe, weather, calendar, and taste — connected by AI.</h2>
           <p>
-            Sign in to sync your wardrobe and unlock personalized
-            outfit intelligence powered by AI.
+            AURA turns your wardrobe into a living style intelligence system. Plan outfits, pack for trips, prepare for events, and learn your Style DNA over time.
           </p>
           <div className="auth-benefits">
             {BENEFITS.map(b => (
@@ -70,9 +71,14 @@ export default function AuthLanding() {
       <div className="auth-form-panel">
         <div className="auth-form-inner">
           <p className="eyebrow">Welcome</p>
-          <h2 style={{ fontSize: 28, marginBottom: 28 }}>
+          <h2 style={{ fontSize: 28, marginBottom: 8 }}>
             {mode === 'signin' ? 'Sign in to AURA' : 'Create your account'}
           </h2>
+          <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
+            {mode === 'signin'
+              ? 'Continue to your personal style intelligence.'
+              : 'Set up your AI-powered style operating system.'}
+          </p>
 
           {success ? (
             <>
@@ -150,25 +156,30 @@ export default function AuthLanding() {
           )}
 
           {!success && (
-            <p style={{ marginTop: 22, fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
-              {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-              <button
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--accent-dark)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-                onClick={() => {
-                  setMode(mode === 'signin' ? 'signup' : 'signin');
-                  setError('');
-                }}
-              >
-                {mode === 'signin' ? 'Create one' : 'Sign in'}
-              </button>
-            </p>
+            <>
+              <p style={{ marginTop: 22, fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
+                {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+                <button
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-dark)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                  onClick={() => {
+                    setMode(mode === 'signin' ? 'signup' : 'signin');
+                    setError('');
+                  }}
+                >
+                  {mode === 'signin' ? 'Create one' : 'Sign in'}
+                </button>
+              </p>
+              <p style={{ marginTop: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+                Private by design. Your wardrobe stays yours.
+              </p>
+            </>
           )}
         </div>
       </div>
