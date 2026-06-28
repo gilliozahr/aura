@@ -202,6 +202,76 @@ export interface StyleDNASummary {
   confidenceScore: number;
 }
 
+// ── Packing + Trip Intelligence ──────────────────────────────────────────────
+
+export interface TravelWeather {
+  date?: string;
+  temperatureC: number;
+  condition: string;
+  humidity?: number;
+  feelsLikeC?: number;
+  available: boolean;
+  city: string;
+  source: string;
+}
+
+export interface TripOccasion {
+  date: string;
+  label: string;
+  formality: 'casual' | 'smart-casual' | 'business' | 'formal';
+  notes?: string;
+}
+
+export interface TripDailyOutfit {
+  date: string;
+  occasion: string;
+  weather?: string;
+  items: string[]; // wardrobe item names
+  outfitScore?: number;
+  reasoning: string;
+  risks?: string[];
+}
+
+export interface PackingItem {
+  id: string;
+  name: string;
+  category: string;
+  source: 'wardrobe' | 'suggested' | 'missing';
+  wardrobeItemId?: string;
+  quantity: number;
+  packed: boolean;
+  reason: string;
+  priority: 'essential' | 'recommended' | 'optional';
+}
+
+export interface MissingItem {
+  name: string;
+  category: string;
+  reason: string;
+  priority: 'essential' | 'recommended' | 'optional';
+}
+
+export interface TripPlan {
+  id: string;
+  destinationCity: string;
+  destinationCountry?: string;
+  startDate: string;
+  endDate: string;
+  purpose: string;
+  occasions: TripOccasion[];
+  luggageType: string;
+  laundryAvailable: boolean;
+  weatherSummary?: TravelWeather;
+  dailyOutfits: TripDailyOutfit[];
+  packingItems: PackingItem[];
+  missingItems: MissingItem[];
+  riskNotes: string[];
+  capsuleNotes?: string;
+  aiSummary?: string;
+  aiEnhanced: boolean;
+  createdAt: string;
+}
+
 export interface AppState {
   user: UserProfile;
   wardrobe: WardrobeItem[];
@@ -211,6 +281,7 @@ export interface AppState {
   stylistBookings: StylistBooking[];
   feedback: FeedbackEvent[];
   styleDNA?: StyleDNAProfile;
+  tripPlans: TripPlan[];
 }
 
 export type View =
