@@ -11,10 +11,25 @@ export interface WeatherContext {
 export interface UserProfile {
   name: string;
   city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
   temperature: number;
   occasion: string;
   styleGoal: string;
   budget: number;
+}
+
+export type LocationSource = 'browser' | 'profile' | 'fallback';
+
+export interface LocationContext {
+  city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  source: LocationSource;
+  label: string;
+  timestamp: string;
 }
 
 export type VisionFallbackReason =

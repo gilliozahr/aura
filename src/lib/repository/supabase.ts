@@ -19,6 +19,9 @@ interface UserProfileRow {
   id: string;
   name: string;
   city: string;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   temperature: number;
   occasion: string;
   style_goal: string;
@@ -145,6 +148,9 @@ export class SupabaseRepository implements IRepository {
       ? {
           name: profileRow.name,
           city: profileRow.city,
+          country: profileRow.country ?? undefined,
+          latitude: profileRow.latitude ?? undefined,
+          longitude: profileRow.longitude ?? undefined,
           temperature: profileRow.temperature,
           occasion: profileRow.occasion,
           styleGoal: profileRow.style_goal,
@@ -236,6 +242,9 @@ export class SupabaseRepository implements IRepository {
       id: uid,
       name: user.name,
       city: user.city,
+      country: user.country ?? null,
+      latitude: user.latitude ?? null,
+      longitude: user.longitude ?? null,
       temperature: user.temperature,
       occasion: user.occasion,
       style_goal: user.styleGoal,
