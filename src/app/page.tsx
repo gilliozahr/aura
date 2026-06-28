@@ -40,7 +40,7 @@ function AuraApp() {
       <Sidebar activeView={activeView} onNavigate={setActiveView} />
       <main className="main">
         <Topbar activeView={activeView} />
-        {activeView === 'home' && <HomeView />}
+        {activeView === 'home' && <HomeView onNavigate={setActiveView} />}
         {activeView === 'wardrobe' && <WardrobeView />}
         {activeView === 'inspiration' && <InspirationView />}
         {activeView === 'packing' && <PackingView />}

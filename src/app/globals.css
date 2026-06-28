@@ -305,9 +305,9 @@ textarea { min-height: 92px; resize: vertical; }
 .auth-hero .brand strong { color: #fff; }
 .auth-hero .brand span { color: rgba(255,255,255,.5); }
 .auth-tagline h2 {
-  font-size: 44px;
+  font-size: 34px;
   font-weight: 300;
-  line-height: 1.15;
+  line-height: 1.22;
   letter-spacing: -.02em;
   color: #fff;
   margin: 48px 0 20px;
@@ -392,4 +392,9 @@ textarea { min-height: 92px; resize: vertical; }
   h1 { font-size: clamp(22px, 6vw, 32px); }
   .briefing h2 { font-size: clamp(22px, 7vw, 40px); }
   .kpi strong { font-size: 26px; }
+  /* Auth form panel full width on small screens */
+  .auth-form-panel { padding: 28px 20px; }
+  .auth-form-inner { max-width: 100%; }
+  /* Edit modal full-screen on small screens */
+  [role="dialog"] > .card { border-radius: 16px; }
 }

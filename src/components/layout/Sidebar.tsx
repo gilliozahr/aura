@@ -9,7 +9,7 @@ const NAV_ITEMS: { id: View; label: string }[] = [
   { id: 'inspiration', label: 'AI Inspiration' },
   { id: 'packing', label: 'Packing' },
   { id: 'occasions', label: 'Occasions' },
-  { id: 'stylist', label: 'Stylist Network' },
+  { id: 'stylist', label: 'Stylist Concierge' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'settings', label: 'Settings' },
 ];
@@ -26,7 +26,7 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
         <div className="brand-mark">A</div>
         <div>
           <strong>AURA</strong>
-          <span>Style Intelligence OS</span>
+          <span>AI Personal Style OS</span>
         </div>
       </div>
 

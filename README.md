@@ -1,24 +1,29 @@
-# AURA — AI Personal Style Operating System
+# AURA — AI Personal Style OS
 
-**v0.2** — Next.js + TypeScript production foundation with Supabase-ready architecture and Agent OS.
+> Your wardrobe, weather, calendar, and taste — connected by AI.
 
-> The original v0.1 vanilla JS files (`index.html`, `app.js`, `styles.css`, `server.js`) are preserved at the repo root for reference.
+AURA is an AI Personal Style Operating System. It turns your wardrobe into a living intelligence system: daily outfit recommendations, trip packing, occasion planning, Style DNA, and Vision AI analysis — all in one place.
+
+---
+
+## Current Version
+
+**v1.1.0 Preview** — Demo polish + investor narrative
 
 ---
 
 ## Features
 
-- Daily Briefing — outfit recommendation from wardrobe
-- Wardrobe management — add items, image upload, demo data
-- AI Inspiration — Buy / Wait / Skip analysis via InspirationAgent
-- Packing planner — travel-aware wardrobe selection
-- Stylist Network — AI-matched human stylist brief
-- Analytics — wardrobe health and coverage
-- Settings — style context (name, city, temp, occasion, goal, budget)
-- Local-first persistence — works without any backend (localStorage fallback)
-- Agent OS — VisionAgent, InspirationAgent, StylistAgent, RecommendationAgent, MemoryAgent, ShoppingAgent, ExplanationAgent
-- Provider-agnostic AI — mock (default), OpenAI, Anthropic, Gemini adapters
-- Supabase-ready — schema, RLS policies, storage buckets defined
+| Feature | Description |
+|---|---|
+| Daily Briefing | AI outfit recommendation scored across occasion, weather, style, and color harmony |
+| Vision AI | Analyze wardrobe items from photos — auto-detects category, color, style, season |
+| Style DNA | Personal taste memory that grows from your outfit feedback and wardrobe signals |
+| Trip Intelligence | Smart packing lists with weather, occasion tiers, daily outfit plans, and gap alerts |
+| Occasion Planner | Event-aware outfit recommendations with formality scoring and weather context |
+| AI Inspiration | Buy / Wait / Skip analysis — evaluates new pieces against your wardrobe |
+| Analytics | Wardrobe coverage, gaps, wear frequency, Style DNA summary |
+| Stylist Concierge | Coming in v1.2 — AI-prepared brief + human stylist session |
 
 ---
 
@@ -31,11 +36,11 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-No environment variables are required. The app runs fully in mock/local mode by default.
+No environment variables are required. The app runs fully in mock/local mode by default (localStorage persistence, mock AI responses).
 
 ---
 
-## Validate Before Deploy
+## Validation
 
 ```bash
 npm run lint        # ESLint
@@ -46,36 +51,77 @@ npm run validate    # All three in sequence
 
 ---
 
-## Supabase Setup (optional — enables cloud persistence)
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Optional | Supabase project URL — enables cloud persistence |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | Supabase anon key (public) |
+| `AI_PROVIDER` | Optional | `openai` (default: `mock`) |
+| `NEXT_PUBLIC_AI_PROVIDER` | Optional | Client-side provider hint |
+| `OPENAI_API_KEY` | Optional | Server-side only — enables real AI |
+| `WEATHER_API_KEY` | Optional | Server-side only — OpenWeather API |
+| `NEXT_PUBLIC_ENABLE_DEMO_TOOLS` | Optional | Set to `true` to show demo tools (Load Demo Data, Clear Data, Demo Journey) |
+
+Without Supabase vars, the app uses localStorage. Without AI keys, mock responses are returned.
+
+---
+
+## Supabase Setup
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. Run `supabase/schema.sql` in the Supabase SQL editor.
-3. Create two storage buckets: `wardrobe-images` and `inspiration-images`.
-4. Copy your project URL and anon key to `.env.local`:
+3. Run `supabase/v0.9_migration.sql` for occasion events support.
+4. Create two storage buckets: `wardrobe-images` and `inspiration-images`.
+5. Add to `.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-The app automatically switches from localStorage to Supabase when these vars are present.
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 App Router |
+| Language | TypeScript |
+| Styling | Plain CSS (custom design system) |
+| Auth + DB | Supabase (Auth, Postgres, RLS, Storage) |
+| AI | OpenAI API (Vision, GPT-4o-mini) |
+| Weather | OpenWeather API |
+| State | React Context + useReducer |
+| Persistence | SupabaseRepository / LocalRepository (localStorage fallback) |
 
 ---
 
-## AI Provider Setup (optional — enables real AI)
+## Demo Mode
 
-Set `NEXT_PUBLIC_AI_PROVIDER` to `openai`, `anthropic`, or `gemini` in `.env.local`, then add the corresponding server-side API key. Real AI calls will be routed through `/api/ai` (planned for v0.3).
+With `NEXT_PUBLIC_ENABLE_DEMO_TOOLS=true`:
 
-Without these vars, the built-in mock adapter is used — the app is fully functional.
+- **Load Demo Data** button in the topbar seeds: 11 wardrobe items, 2 inspirations, 2 occasion events, 1 Paris trip plan, 1 saved outfit.
+- **Clear Data** button resets all state.
+- **Demo Journey** card appears on the Daily Briefing with a guided walkthrough sequence.
+
+Demo tools are completely hidden when the flag is absent or false.
 
 ---
 
-## Vercel Deployment
+## Version History
 
-1. Push this repo to GitHub.
-2. Import in Vercel — framework is detected as **Next.js** automatically.
-3. Add environment variables in the Vercel dashboard (optional).
-4. Deploy.
+| Version | Summary |
+|---|---|
+| v1.1.0 Preview | Demo polish, investor narrative, landing page, onboarding refinement |
+| v1.0.0 | MVP hardening, onboarding checklist, empty states, demo mode, mobile pass |
+| v0.9.0 | Calendar + Occasion Intelligence, weekly brief, outfit recommendations |
+| v0.8.x | Packing + Trip Intelligence, weather, city/country auto-detect |
+| v0.7.x | Wardrobe Vision AI, HEIC handling, correction tracking |
+| v0.6.x | Style DNA, feedback learning, analytics |
+| v0.5.x | Supabase Auth + RLS, SupabaseRepository |
+| v0.3–0.4 | AI Inspiration, Buy/Wait/Skip, AI outfit API routes |
+| v0.2 | Next.js + TypeScript foundation, Agent OS, Supabase schema |
 
 ---
 
@@ -83,53 +129,47 @@ Without these vars, the built-in mock adapter is used — the app is fully funct
 
 ```
 src/
-  app/                  Next.js App Router (layout, page, globals.css)
+  app/                    Next.js App Router (layout, page, globals.css)
   components/
-    layout/             Sidebar, Topbar, Toast
-    views/              HomeView, WardrobeView, InspirationView, PackingView,
-                        StylistView, AnalyticsView, SettingsView
+    auth/                 AuthLanding, AuthModal, AuthSection
+    layout/               Sidebar, Topbar, Toast
+    views/                HomeView, WardrobeView, InspirationView, PackingView,
+                          OccasionsView, StylistView, AnalyticsView, SettingsView
   lib/
-    types.ts            All TypeScript types
-    utils.ts            uid, scoreClass, fileToDataURL
-    repository/         IRepository interface, LocalRepository, SupabaseRepository
+    types.ts              All TypeScript types
+    utils.ts              uid, scoreClass, fileToDataURL, isValidItemName
+    version.ts            Version string and release notes
+    repository/           IRepository interface, LocalRepository, SupabaseRepository
+    occasions/            Occasion outfit engine (deterministic + optional AI)
+    server/               Shared server helpers (weather, Supabase server client)
+    supabase/             Client and server Supabase factory
   store/
-    index.tsx           AuraProvider, useAura (React Context + useReducer)
-    toast.tsx           ToastProvider, useToast
-    default.ts          defaultState(), makeDemoItems()
+    index.tsx             AuraProvider, useAura (React Context + useReducer)
+    auth.tsx              AuthProvider, useAuth
+    toast.tsx             ToastProvider, useToast
+    default.ts            defaultState(), demo data generators
 
 packages/
-  ai/                   AIAdapter interface, createAIAdapter factory
-    adapters/           mock, openai, anthropic, gemini
-  agents/               VisionAgent, InspirationAgent, StylistAgent,
-                        RecommendationAgent, MemoryAgent, ShoppingAgent, ExplanationAgent
-  recommendation/       Re-exports RecommendationAgent
-  memory/               Re-exports MemoryAgent
-  storage/              Storage upload abstraction
+  ai/                     AIAdapter interface, createAIAdapter factory
+    adapters/             mock, openai adapters
+  agents/                 RecommendationAgent and supporting agents
 
 supabase/
-  schema.sql            Tables, RLS policies, storage bucket definitions
+  schema.sql              Tables, RLS policies, storage bucket definitions
+  v0.9_migration.sql      occasion_events table + RLS
+
+docs/
+  investor_demo_script.md Investor demo walkthrough and positioning
+  v1.0_smoke_test.md      Manual QA checklist
+  DEPLOYMENT_GUIDE.md     Production deployment steps
 ```
 
 ---
 
-## Known Limitations (v0.2)
+## Release Process
 
-| Area | Status |
-|---|---|
-| Auth | Not yet wired — all data is per-browser |
-| Supabase persistence | Schema ready, SupabaseRepository is a placeholder (v0.3) |
-| Real AI calls | Adapters defined, routing via /api/ai planned for v0.3 |
-| Image storage | Base64 in localStorage; Supabase Storage bucket defined for v0.3 |
-| Payments / checkout | Not included — Stripe planned for v0.4 |
-| Marketplace | Not included — planned for v0.4+ |
-
----
-
-## Roadmap
-
-| Version | Focus |
-|---|---|
-| v0.2 | Next.js + TS foundation, Agent OS, Supabase schema ✅ |
-| v0.3 | Supabase auth + persistence, real AI via API routes, image storage |
-| v0.4 | Stripe checkout, marketplace integrations |
-| v1.0 | Multi-user, stylist marketplace, full Agent OS, mobile app |
+1. All development on feature branches (e.g. `v1.1-demo-polish-investor-narrative`).
+2. Run `npm run validate` before any merge.
+3. Update `src/lib/version.ts` with new version string and release notes.
+4. Tag the release commit.
+5. Do not merge to `main` without explicit sign-off.

@@ -5,7 +5,7 @@ import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid, scoreClass, isValidItemName } from '@/lib/utils';
 import { recommendationAgent } from '@aura/agents';
-import type { OutfitReport, SavedOutfit, WardrobeItem, WeatherContext, LocationContext } from '@/lib/types';
+import type { OutfitReport, SavedOutfit, WardrobeItem, WeatherContext, LocationContext, View } from '@/lib/types';
 
 // ── Score bar ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +80,17 @@ function EditOutfitPanel({
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export default function HomeView() {
+const DEMO_JOURNEY = [
+  { step: 1, label: 'Inspect the demo wardrobe', view: 'wardrobe' as View },
+  { step: 2, label: 'Add an item with Vision AI', view: 'wardrobe' as View },
+  { step: 3, label: 'Generate and accept today\'s outfit', view: null },
+  { step: 4, label: 'Recompute your Style DNA', view: 'settings' as View },
+  { step: 5, label: 'Review the Paris trip plan', view: 'packing' as View },
+  { step: 6, label: 'Check the Business Dinner occasion', view: 'occasions' as View },
+  { step: 7, label: 'Explore wardrobe analytics', view: 'analytics' as View },
+];
+
+export default function HomeView({ onNavigate }: { onNavigate?: (view: View) => void }) {
   const { state, dispatch } = useAura();
   const { toast } = useToast();
 
@@ -301,12 +311,12 @@ export default function HomeView() {
   const hasTripPlan = (state.tripPlans ?? []).length > 0;
   const hasOccasionEvent = (state.occasionEvents ?? []).length > 0;
   const checklistItems = [
-    { label: 'Add a wardrobe item', done: hasWardrobeItem },
-    { label: 'Upload a wardrobe photo for Vision AI', done: hasVisionItem },
-    { label: 'Generate and save a daily outfit', done: hasSavedOutfit },
-    { label: 'Build your Style DNA', done: hasStyleDNA },
-    { label: 'Create a trip plan', done: hasTripPlan },
-    { label: 'Create an occasion event', done: hasOccasionEvent },
+    { label: 'Add your first wardrobe item', done: hasWardrobeItem },
+    { label: 'Analyze an item with Vision AI', done: hasVisionItem },
+    { label: 'Accept a daily outfit recommendation', done: hasSavedOutfit },
+    { label: 'Build your Style DNA profile', done: hasStyleDNA },
+    { label: 'Plan a trip with packing intelligence', done: hasTripPlan },
+    { label: 'Add an upcoming occasion', done: hasOccasionEvent },
   ];
   const doneCount = checklistItems.filter(i => i.done).length;
   const allDone = doneCount === checklistItems.length;
@@ -567,9 +577,20 @@ export default function HomeView() {
       {/* Onboarding checklist */}
       {!allDone && (
         <div className="card" style={{ marginTop: 18, padding: '1.25rem 1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <p className="eyebrow" style={{ margin: 0 }}>Getting Started</p>
-            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{doneCount}/{checklistItems.length} complete</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{doneCount} / {checklistItems.length}</span>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+            Complete these steps to unlock AURA&apos;s full intelligence.
+          </p>
+          {/* Progress bar */}
+          <div style={{ height: 4, borderRadius: 4, background: 'var(--line)', marginBottom: 12 }}>
+            <div style={{
+              height: 4, borderRadius: 4, background: 'var(--accent)',
+              width: `${Math.round((doneCount / checklistItems.length) * 100)}%`,
+              transition: 'width 0.4s ease',
+            }} />
           </div>
           <div style={{ display: 'grid', gap: 6 }}>
             {checklistItems.map((item, i) => (
@@ -590,8 +611,39 @@ export default function HomeView() {
       {allDone && (
         <div className="card" style={{ marginTop: 18, padding: '1rem 1.5rem', background: 'rgba(36,107,69,0.06)', borderColor: 'rgba(36,107,69,0.18)' }}>
           <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--good)', fontWeight: 600 }}>
-            AURA is ready for daily use. All features are active.
+            AURA is ready for daily use. All features active.
           </p>
+        </div>
+      )}
+
+      {/* Demo Journey card — visible only in demo mode */}
+      {process.env.NEXT_PUBLIC_ENABLE_DEMO_TOOLS === 'true' && (
+        <div className="card" style={{ marginTop: 18, padding: '1.25rem 1.5rem', borderColor: 'rgba(139,111,71,0.3)', background: 'rgba(139,111,71,0.04)' }}>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>Investor Demo Journey</p>
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
+            Follow this sequence to showcase AURA&apos;s full capabilities.
+          </p>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {DEMO_JOURNEY.map(({ step, label, view }) => (
+              <div key={step} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.875rem' }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 800,
+                  background: 'var(--accent)', color: 'white',
+                }}>{step}</span>
+                {view && onNavigate ? (
+                  <button
+                    style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--accent-dark)', fontWeight: 600, fontSize: '0.875rem', textDecoration: 'underline', textDecorationColor: 'transparent' }}
+                    onMouseEnter={e => ((e.target as HTMLElement).style.textDecorationColor = 'var(--accent-dark)')}
+                    onMouseLeave={e => ((e.target as HTMLElement).style.textDecorationColor = 'transparent')}
+                    onClick={() => onNavigate(view)}
+                  >{label}</button>
+                ) : (
+                  <span style={{ color: 'var(--ink)' }}>{label}</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
