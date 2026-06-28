@@ -12,6 +12,8 @@ type Action =
   | { type: 'HYDRATE'; payload: AppState }
   | { type: 'SET_USER'; payload: UserProfile }
   | { type: 'ADD_WARDROBE_ITEM'; payload: WardrobeItem }
+  | { type: 'UPDATE_WARDROBE_ITEM'; payload: WardrobeItem }
+  | { type: 'DELETE_WARDROBE_ITEM'; id: string }
   | { type: 'SET_WARDROBE'; payload: WardrobeItem[] }
   | { type: 'ADD_INSPIRATION'; payload: InspirationItem }
   | { type: 'ADD_ORDER'; payload: Order }
@@ -38,6 +40,10 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, user: action.payload };
     case 'ADD_WARDROBE_ITEM':
       return { ...state, wardrobe: [...state.wardrobe, action.payload] };
+    case 'UPDATE_WARDROBE_ITEM':
+      return { ...state, wardrobe: state.wardrobe.map(w => w.id === action.payload.id ? action.payload : w) };
+    case 'DELETE_WARDROBE_ITEM':
+      return { ...state, wardrobe: state.wardrobe.filter(w => w.id !== action.id) };
     case 'SET_WARDROBE':
       return { ...state, wardrobe: action.payload };
     case 'ADD_INSPIRATION':
@@ -133,6 +139,12 @@ export function AuraProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'ADD_WARDROBE_ITEM':
         persist(repo.addWardrobeItem(action.payload));
+        break;
+      case 'UPDATE_WARDROBE_ITEM':
+        persist(repo.updateWardrobeItem(action.payload));
+        break;
+      case 'DELETE_WARDROBE_ITEM':
+        persist(repo.deleteWardrobeItem(action.id));
         break;
       case 'SET_WARDROBE':
         persist(repo.setWardrobe(action.payload));

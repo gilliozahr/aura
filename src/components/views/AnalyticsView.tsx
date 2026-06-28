@@ -61,6 +61,19 @@ export default function AnalyticsView() {
     ? Math.round(outfits.reduce((s, o) => s + o.report.compatibilityScore, 0) / outfits.length)
     : null;
 
+  if (wardrobe.length === 0) {
+    return (
+      <div className="card" style={{ maxWidth: 520, padding: '3rem 2rem', textAlign: 'center' }}>
+        <p className="eyebrow">Analytics</p>
+        <h2 style={{ marginBottom: '0.75rem' }}>Your style intelligence will sharpen over time.</h2>
+        <p style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: 1.65, marginBottom: '1.5rem' }}>
+          Add wardrobe items and give feedback on daily outfit recommendations to unlock deeper insights — category coverage, duplicate risk, Style DNA confidence, and outfit acceptance trends.
+        </p>
+        <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Start in Wardrobe to add your first item.</p>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* KPI row */}
@@ -178,6 +191,21 @@ export default function AnalyticsView() {
           )}
         </div>
       </div>
+
+      {/* Style DNA building state */}
+      {(!state.styleDNA || state.styleDNA.confidenceScore === 0) && (
+        <div className="card" style={{ marginTop: 0, padding: '1.25rem 1.5rem' }}>
+          <p className="eyebrow">Style DNA</p>
+          <h2 style={{ marginBottom: 6 }}>Building Your Style Memory</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--muted)', lineHeight: 1.6, marginBottom: '1rem' }}>
+            AURA learns from your wardrobe, outfit feedback, and inspiration decisions. Go to Settings → Recompute Style DNA to start building your personal style profile.
+          </p>
+          <div style={{ height: 4, borderRadius: 2, background: 'var(--line)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: '0%', background: 'var(--accent)', borderRadius: 2 }} />
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 6, marginBottom: 0 }}>0% — no signals yet</p>
+        </div>
+      )}
 
       {/* Style DNA panel */}
       {state.styleDNA && state.styleDNA.confidenceScore > 0 && (
