@@ -2,6 +2,7 @@ import type {
   AppState,
   FeedbackEvent,
   InspirationItem,
+  OccasionEvent,
   Order,
   SavedOutfit,
   StyleDNAProfile,
@@ -108,6 +109,28 @@ export class LocalRepository implements IRepository {
   async deleteTripPlan(id: string): Promise<void> {
     const s = this.read();
     this.write({ ...s, tripPlans: (s.tripPlans ?? []).filter(p => p.id !== id) });
+  }
+
+  async getOccasionEvents(): Promise<OccasionEvent[]> {
+    return this.read().occasionEvents ?? [];
+  }
+
+  async saveOccasionEvent(event: OccasionEvent): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, occasionEvents: [...(s.occasionEvents ?? []), event] });
+  }
+
+  async updateOccasionEvent(id: string, updates: Partial<OccasionEvent>): Promise<void> {
+    const s = this.read();
+    this.write({
+      ...s,
+      occasionEvents: (s.occasionEvents ?? []).map(e => (e.id === id ? { ...e, ...updates } : e)),
+    });
+  }
+
+  async deleteOccasionEvent(id: string): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, occasionEvents: (s.occasionEvents ?? []).filter(e => e.id !== id) });
   }
 
   async reset(): Promise<void> {

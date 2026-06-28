@@ -63,7 +63,7 @@ Return ONLY valid JSON, no markdown:
 {"compatibilityScore":<int>,"styleMatchScore":<int>,"wardrobeImpactScore":<int>,"budgetFitScore":<int>,"duplicateRisk":<int>,"confidence":<int>,"decision":"<BUY|WAIT|SKIP>","reasoningSummary":"<string>","whyItWorks":"<string>","risks":["<string>"],"suggestedOutfits":["<string>"],"betterAlternatives":["<string>"],"missingWardrobeOpportunities":["<string>"]}`;
 }
 
-function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext, styleDNA?: StyleDNASummary): string {
+function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: WeatherContext, styleDNA?: StyleDNASummary, occasionContext?: import('../index').OccasionContext): string {
   const itemList = items
     .map(i => {
       const base = `- ${i.name} (${i.category}, ${i.color}, ${i.style}, ${i.season}, ${i.occasion})`;
@@ -86,6 +86,9 @@ function buildOutfitPrompt(items: WardrobeItem[], user: UserProfile, weather?: W
     : `Weather guidance: data unavailable — set weatherFitScore to 55 and note "Weather data unavailable" in reasoningSummary`;
 
   const dnaBlock = styleDNA ? buildDNABlock(styleDNA) : '';
+  const occasionLine = occasionContext
+    ? `\nOCCASION CONTEXT:\n- Event: ${occasionContext.eventType}, ${occasionContext.formality}, ${occasionContext.date}${occasionContext.city ? `, ${occasionContext.city}` : ''}${occasionContext.country ? `, ${occasionContext.country}` : ''}${occasionContext.notes ? `\n- Notes: ${occasionContext.notes}` : ''}`
+    : '';
   return `You are AURA, an AI personal style operating system. Analyze this outfit combination.
 
 OUTFIT ITEMS:
@@ -94,7 +97,7 @@ ${itemList}
 USER CONTEXT:
 - Style goal: "${user.styleGoal}"
 - Occasion: "${user.occasion}"
-${weatherLine}${dnaBlock ? `\n${dnaBlock}` : ''}
+${weatherLine}${dnaBlock ? `\n${dnaBlock}` : ''}${occasionLine}
 
 ${weatherGuidance}
 
@@ -200,7 +203,7 @@ export class OpenAIAdapter implements AIAdapter {
       return { ...report, _meta: { ...report._meta!, provider: 'openai', fallbackUsed: true } };
     }
 
-    const { items, user, weather, styleDNA } = input;
+    const { items, user, weather, styleDNA, occasionContext } = input;
 
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -211,7 +214,7 @@ export class OpenAIAdapter implements AIAdapter {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [{ role: 'user', content: buildOutfitPrompt(items, user, weather, styleDNA) }],
+          messages: [{ role: 'user', content: buildOutfitPrompt(items, user, weather, styleDNA, occasionContext) }],
           response_format: { type: 'json_object' },
           max_tokens: 512,
           temperature: 0.3,

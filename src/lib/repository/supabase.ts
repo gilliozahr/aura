@@ -3,12 +3,17 @@ import type {
   FeedbackEvent,
   InspirationItem,
   InspirationReport,
+  OccasionEvent,
+  OccasionFormality,
+  OccasionOutfitRecommendation,
+  OccasionType,
   Order,
   OutfitReport,
   SavedOutfit,
   StyleDNAProfile,
   StylistBooking,
   TripPlan,
+  TravelWeather,
   UserProfile,
   WardrobeItem,
 } from '@/lib/types';
@@ -81,6 +86,55 @@ interface SavedOutfitRow {
   created_at: string;
 }
 
+interface OccasionEventRow {
+  id: string;
+  title: string;
+  event_type: string;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  city: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  country_code: string | null;
+  formality: string;
+  notes: string | null;
+  weather_context: Record<string, unknown> | null;
+  recommended_outfit: OccasionOutfitRecommendation | null;
+  outfit_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToOccasionEvent(r: OccasionEventRow): OccasionEvent {
+  const wc = r.weather_context;
+  const weatherContext: TravelWeather | undefined =
+    wc && typeof wc === 'object' && 'available' in wc && (wc as { available: unknown }).available
+      ? (wc as unknown as TravelWeather)
+      : undefined;
+  return {
+    id: r.id,
+    title: r.title,
+    eventType: r.event_type as OccasionType,
+    date: r.event_date,
+    startTime: r.start_time ?? undefined,
+    endTime: r.end_time ?? undefined,
+    city: r.city ?? undefined,
+    country: r.country ?? undefined,
+    latitude: r.latitude ?? undefined,
+    longitude: r.longitude ?? undefined,
+    countryCode: r.country_code ?? undefined,
+    formality: r.formality as OccasionFormality,
+    notes: r.notes ?? undefined,
+    weatherContext,
+    recommendedOutfit: r.recommended_outfit ?? undefined,
+    outfitStatus: (r.outfit_status as OccasionEvent['outfitStatus']) ?? 'pending',
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
 export class SupabaseRepository implements IRepository {
   private get client() {
     return createAuraClient();
@@ -100,7 +154,7 @@ export class SupabaseRepository implements IRepository {
     if (!authUser) return defaultState();
     const uid = authUser.id;
 
-    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes, tripPlansRes] =
+    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes, tripPlansRes, occasionEventsRes] =
       await Promise.all([
         this.client.from('user_profiles').select('*').eq('id', uid).single(),
         this.client.from('wardrobe_items').select('*').eq('user_id', uid),
@@ -111,6 +165,7 @@ export class SupabaseRepository implements IRepository {
         this.client.from('saved_outfits').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(20),
         this.client.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
         this.client.from('trip_plans').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+        this.client.from('occasion_events').select('*').eq('user_id', uid).order('event_date', { ascending: true }),
       ]);
 
     if (wardrobeRes.error) console.error('[SupabaseRepository] loadState/wardrobe:', wardrobeRes.error.message);
@@ -289,7 +344,9 @@ export class SupabaseRepository implements IRepository {
       createdAt: r.created_at,
     }));
 
-    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans };
+    const occasionEvents: OccasionEvent[] = ((occasionEventsRes.data ?? []) as unknown as OccasionEventRow[]).map(rowToOccasionEvent);
+
+    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans, occasionEvents };
   }
 
   private assertNoError(error: { message: string } | null, ctx: string): void {
@@ -559,6 +616,81 @@ export class SupabaseRepository implements IRepository {
     this.assertNoError(error, 'deleteTripPlan');
   }
 
+  async getOccasionEvents(): Promise<OccasionEvent[]> {
+    const uid = await this.userId();
+    if (!uid) return [];
+    const { data } = await this.client
+      .from('occasion_events')
+      .select('*')
+      .eq('user_id', uid)
+      .order('event_date', { ascending: true });
+    if (!data) return [];
+    return (data as unknown as OccasionEventRow[]).map(rowToOccasionEvent);
+  }
+
+  async saveOccasionEvent(event: OccasionEvent): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client.from('occasion_events').insert({
+      id: event.id,
+      user_id: uid,
+      title: event.title,
+      event_type: event.eventType,
+      event_date: event.date,
+      start_time: event.startTime ?? null,
+      end_time: event.endTime ?? null,
+      city: event.city ?? null,
+      country: event.country ?? null,
+      latitude: event.latitude ?? null,
+      longitude: event.longitude ?? null,
+      country_code: event.countryCode ?? null,
+      formality: event.formality,
+      notes: event.notes ?? null,
+      weather_context: event.weatherContext ?? {},
+      recommended_outfit: event.recommendedOutfit ?? null,
+      outfit_status: event.outfitStatus,
+    });
+    this.assertNoError(error, 'saveOccasionEvent');
+  }
+
+  async updateOccasionEvent(id: string, updates: Partial<OccasionEvent>): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.title !== undefined) row.title = updates.title;
+    if (updates.eventType !== undefined) row.event_type = updates.eventType;
+    if (updates.date !== undefined) row.event_date = updates.date;
+    if (updates.startTime !== undefined) row.start_time = updates.startTime;
+    if (updates.endTime !== undefined) row.end_time = updates.endTime;
+    if (updates.city !== undefined) row.city = updates.city;
+    if (updates.country !== undefined) row.country = updates.country;
+    if (updates.latitude !== undefined) row.latitude = updates.latitude;
+    if (updates.longitude !== undefined) row.longitude = updates.longitude;
+    if (updates.countryCode !== undefined) row.country_code = updates.countryCode;
+    if (updates.formality !== undefined) row.formality = updates.formality;
+    if (updates.notes !== undefined) row.notes = updates.notes;
+    if (updates.weatherContext !== undefined) row.weather_context = updates.weatherContext;
+    if (updates.recommendedOutfit !== undefined) row.recommended_outfit = updates.recommendedOutfit;
+    if (updates.outfitStatus !== undefined) row.outfit_status = updates.outfitStatus;
+    const { error } = await this.client
+      .from('occasion_events')
+      .update(row)
+      .eq('id', id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'updateOccasionEvent');
+  }
+
+  async deleteOccasionEvent(id: string): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client
+      .from('occasion_events')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'deleteOccasionEvent');
+  }
+
   async reset(): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
@@ -571,6 +703,7 @@ export class SupabaseRepository implements IRepository {
       this.client.from('saved_outfits').delete().eq('user_id', uid),
       this.client.from('style_dna_profiles').delete().eq('user_id', uid),
       this.client.from('trip_plans').delete().eq('user_id', uid),
+      this.client.from('occasion_events').delete().eq('user_id', uid),
     ]);
   }
 

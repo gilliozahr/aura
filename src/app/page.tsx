@@ -13,6 +13,7 @@ import HomeView from '@/components/views/HomeView';
 import WardrobeView from '@/components/views/WardrobeView';
 import InspirationView from '@/components/views/InspirationView';
 import PackingView from '@/components/views/PackingView';
+import OccasionsView from '@/components/views/OccasionsView';
 import StylistView from '@/components/views/StylistView';
 import AnalyticsView from '@/components/views/AnalyticsView';
 import SettingsView from '@/components/views/SettingsView';
@@ -43,6 +44,7 @@ function AuraApp() {
         {activeView === 'wardrobe' && <WardrobeView />}
         {activeView === 'inspiration' && <InspirationView />}
         {activeView === 'packing' && <PackingView />}
+        {activeView === 'occasions' && <OccasionsView />}
         {activeView === 'stylist' && <StylistView />}
         {activeView === 'analytics' && <AnalyticsView />}
         {activeView === 'settings' && <SettingsView />}

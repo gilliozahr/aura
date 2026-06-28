@@ -498,6 +498,43 @@ export default function HomeView() {
         </div>
       </div>
 
+      {/* Upcoming occasions strip */}
+      {(() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+        const upcoming = (state.occasionEvents ?? []).filter(e => e.date === today || e.date === tomorrow);
+        if (upcoming.length === 0) return null;
+        return (
+          <div style={{ marginTop: 18 }}>
+            {upcoming.map(e => {
+              const isToday = e.date === today;
+              const needsOutfit = e.outfitStatus === 'pending' || e.outfitStatus === 'rejected';
+              return (
+                <div key={e.id} className="card" style={{ padding: '0.85rem 1.25rem', marginBottom: 8, borderLeft: `3px solid ${needsOutfit ? '#b07030' : '#3a7a4a'}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div>
+                      <p className="eyebrow" style={{ margin: 0, marginBottom: 2 }}>{isToday ? 'Today' : 'Tomorrow'} · {e.eventType}</p>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{e.title}</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>{e.formality}</span>
+                    </div>
+                    {needsOutfit && (
+                      <span style={{ fontSize: 12, color: '#b07030', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        Outfit needed
+                      </span>
+                    )}
+                    {!needsOutfit && (
+                      <span style={{ fontSize: 12, color: '#3a7a4a', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        Ready
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* KPI strip */}
       <div className="grid four" style={{ marginTop: 18 }}>
         <div className="card kpi"><span>Wardrobe Items</span><strong>{wardrobeLength}</strong></div>

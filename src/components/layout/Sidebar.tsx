@@ -8,6 +8,7 @@ const NAV_ITEMS: { id: View; label: string }[] = [
   { id: 'wardrobe', label: 'Wardrobe' },
   { id: 'inspiration', label: 'AI Inspiration' },
   { id: 'packing', label: 'Packing' },
+  { id: 'occasions', label: 'Occasions' },
   { id: 'stylist', label: 'Stylist Network' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'settings', label: 'Settings' },
