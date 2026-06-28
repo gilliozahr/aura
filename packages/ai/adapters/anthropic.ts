@@ -248,14 +248,31 @@ export class AnthropicAdapter implements AIAdapter {
       return new MockAIAdapter().analyzeWardrobeImage(input);
     }
 
-    // Extract base64 data from data URL
-    const match = input.imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (!match) {
-      console.warn('[AnthropicAdapter] analyzeWardrobeImage: invalid data URL format');
-      return new MockAIAdapter().analyzeWardrobeImage(input);
+    // Resolve to base64 — Anthropic vision requires base64, not a URL
+    let mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = 'image/jpeg';
+    let base64Data: string;
+
+    if (input.imageDataUrl.startsWith('https://')) {
+      // Fetch the public image and convert to base64
+      const imgRes = await fetch(input.imageDataUrl).catch(() => null);
+      if (!imgRes || !imgRes.ok) {
+        console.warn('[AnthropicAdapter] analyzeWardrobeImage: could not fetch image URL');
+        return new MockAIAdapter().analyzeWardrobeImage(input);
+      }
+      const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg';
+      const supported = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      mediaType = (supported.includes(contentType) ? contentType : 'image/jpeg') as typeof mediaType;
+      const buffer = await imgRes.arrayBuffer();
+      base64Data = Buffer.from(buffer).toString('base64');
+    } else {
+      const match = input.imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+      if (!match) {
+        console.warn('[AnthropicAdapter] analyzeWardrobeImage: invalid data URL format');
+        return new MockAIAdapter().analyzeWardrobeImage(input);
+      }
+      mediaType = match[1] as typeof mediaType;
+      base64Data = match[2];
     }
-    const mediaType = match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-    const base64Data = match[2];
 
     const prompt = `You are AURA, an AI wardrobe assistant. Analyze this clothing item image and extract structured metadata.
 

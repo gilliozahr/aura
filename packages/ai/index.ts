@@ -16,7 +16,10 @@ export interface OutfitInput {
 }
 
 export interface VisionInput {
-  /** base64 data URL (data:image/jpeg;base64,...) */
+  /**
+   * Either a base64 data URL (data:image/jpeg;base64,...) or a public HTTPS URL
+   * such as a Supabase Storage public URL. The adapters handle both forms.
+   */
   imageDataUrl: string;
   /** hint from the user, e.g. "Navy blazer" */
   nameHint?: string;
