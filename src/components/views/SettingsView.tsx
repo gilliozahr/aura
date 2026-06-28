@@ -5,7 +5,19 @@ import type { FormEvent } from 'react';
 import { useAura } from '@/store';
 import { AURA_VERSION, AURA_RELEASE_NOTES } from '@/lib/version';
 import { useToast } from '@/store/toast';
-import type { PreferredFit, StyleDNAProfile, UserSizeProfile, WeatherContext } from '@/lib/types';
+import type { MeasurementUnit, PreferredFit, StyleDNAProfile, UserSizeProfile, WeatherContext } from '@/lib/types';
+
+// ── Size profile unit config ───────────────────────────────────────────────────
+
+const UNIT_RANGES = {
+  cm: { height: [120, 230], chest: [60, 160], waist: [50, 160], hips: [60, 170], shoulder: [30, 70], inseam: [50, 120] },
+  in: { height: [48, 90],  chest: [24, 65],  waist: [20, 65],  hips: [24, 70],  shoulder: [12, 30], inseam: [20, 45]  },
+} as const;
+
+const UNIT_PLACEHOLDERS = {
+  cm: { height: '178', chest: '96', waist: '82', hips: '95', shoulder: '44', inseam: '81' },
+  in: { height: '70', chest: '38', waist: '34', hips: '38', shoulder: '17', inseam: '32' },
+} as const;
 
 export default function SettingsView() {
   const { state, dispatch } = useAura();
@@ -13,6 +25,9 @@ export default function SettingsView() {
   const [locating, setLocating] = useState(false);
   const [locLabel, setLocLabel] = useState('');
   const [dnaLoading, setDnaLoading] = useState(false);
+  const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>(
+    state.user.sizeProfile?.measurementUnit ?? 'cm'
+  );
 
   async function handleRecomputeDNA() {
     setDnaLoading(true);
@@ -182,11 +197,14 @@ export default function SettingsView() {
             const num = (key: string) => { const v = (f.get(key) as string).trim(); return v ? parseFloat(v) : undefined; };
             const str = (key: string) => { const v = (f.get(key) as string).trim(); return v || undefined; };
             const sizeProfile: UserSizeProfile = {
-              heightCm: num('heightCm'),
+              measurementUnit,
+              heightCm: num('height'),
               weightKg: num('weightKg'),
-              chestCm: num('chestCm'),
-              waistCm: num('waistCm'),
-              hipsCm: num('hipsCm'),
+              chestCm: num('chest'),
+              waistCm: num('waist'),
+              hipsCm: num('hips'),
+              shoulderCm: num('shoulder'),
+              inseamCm: num('inseam'),
               shoeSizeEU: num('shoeSizeEU'),
               preferredFit: (str('preferredFit') as PreferredFit | undefined),
               topSize: str('topSize'),
@@ -198,18 +216,116 @@ export default function SettingsView() {
             toast('Size profile saved.');
           }}
         >
+          {/* Unit selector */}
+          <label>
+            Measurement unit
+            <select
+              name="measurementUnit"
+              value={measurementUnit}
+              onChange={e => setMeasurementUnit(e.target.value as MeasurementUnit)}
+            >
+              <option value="cm">Centimeters (cm)</option>
+              <option value="in">Inches (in)</option>
+            </select>
+          </label>
+
+          {/* Height + Weight */}
           <div className="grid two">
-            <label>Height (cm) <input name="heightCm" type="number" min="100" max="250" defaultValue={state.user.sizeProfile?.heightCm ?? ''} placeholder="e.g. 178" /></label>
-            <label>Weight (kg) <input name="weightKg" type="number" min="30" max="300" defaultValue={state.user.sizeProfile?.weightKg ?? ''} placeholder="e.g. 75" /></label>
+            <label>
+              Height ({measurementUnit})
+              <input
+                name="height"
+                type="number"
+                step="0.5"
+                min={UNIT_RANGES[measurementUnit].height[0]}
+                max={UNIT_RANGES[measurementUnit].height[1]}
+                defaultValue={state.user.sizeProfile?.heightCm ?? ''}
+                placeholder={`e.g. ${UNIT_PLACEHOLDERS[measurementUnit].height}`}
+              />
+            </label>
+            <label>
+              Weight (kg)
+              <input name="weightKg" type="number" min="30" max="300" step="0.5" defaultValue={state.user.sizeProfile?.weightKg ?? ''} placeholder="e.g. 75" />
+            </label>
           </div>
+
+          {/* Chest + Waist */}
           <div className="grid two">
-            <label>Chest (cm) <input name="chestCm" type="number" min="50" max="200" defaultValue={state.user.sizeProfile?.chestCm ?? ''} placeholder="e.g. 96" /></label>
-            <label>Waist (cm) <input name="waistCm" type="number" min="50" max="200" defaultValue={state.user.sizeProfile?.waistCm ?? ''} placeholder="e.g. 82" /></label>
+            <label>
+              Chest ({measurementUnit})
+              <input
+                name="chest"
+                type="number"
+                step="0.5"
+                min={UNIT_RANGES[measurementUnit].chest[0]}
+                max={UNIT_RANGES[measurementUnit].chest[1]}
+                defaultValue={state.user.sizeProfile?.chestCm ?? ''}
+                placeholder={`e.g. ${UNIT_PLACEHOLDERS[measurementUnit].chest}`}
+              />
+            </label>
+            <label>
+              Waist ({measurementUnit})
+              <input
+                name="waist"
+                type="number"
+                step="0.5"
+                min={UNIT_RANGES[measurementUnit].waist[0]}
+                max={UNIT_RANGES[measurementUnit].waist[1]}
+                defaultValue={state.user.sizeProfile?.waistCm ?? ''}
+                placeholder={`e.g. ${UNIT_PLACEHOLDERS[measurementUnit].waist}`}
+              />
+            </label>
           </div>
+
+          {/* Hips + Shoulder */}
           <div className="grid two">
-            <label>Hips (cm) <input name="hipsCm" type="number" min="50" max="200" defaultValue={state.user.sizeProfile?.hipsCm ?? ''} placeholder="e.g. 95" /></label>
-            <label>Shoe size EU <input name="shoeSizeEU" type="number" min="30" max="55" defaultValue={state.user.sizeProfile?.shoeSizeEU ?? ''} placeholder="e.g. 43" /></label>
+            <label>
+              Hips ({measurementUnit})
+              <input
+                name="hips"
+                type="number"
+                step="0.5"
+                min={UNIT_RANGES[measurementUnit].hips[0]}
+                max={UNIT_RANGES[measurementUnit].hips[1]}
+                defaultValue={state.user.sizeProfile?.hipsCm ?? ''}
+                placeholder={`e.g. ${UNIT_PLACEHOLDERS[measurementUnit].hips}`}
+              />
+            </label>
+            <label>
+              Shoulder ({measurementUnit})
+              <input
+                name="shoulder"
+                type="number"
+                step="0.5"
+                min={UNIT_RANGES[measurementUnit].shoulder[0]}
+                max={UNIT_RANGES[measurementUnit].shoulder[1]}
+                defaultValue={state.user.sizeProfile?.shoulderCm ?? ''}
+                placeholder={`e.g. ${UNIT_PLACEHOLDERS[measurementUnit].shoulder}`}
+              />
+            </label>
           </div>
+
+          {/* Inseam + Shoe EU */}
+          <div className="grid two">
+            <label>
+              Inseam ({measurementUnit})
+              <input
+                name="inseam"
+                type="number"
+                step="0.5"
+                min={UNIT_RANGES[measurementUnit].inseam[0]}
+                max={UNIT_RANGES[measurementUnit].inseam[1]}
+                defaultValue={state.user.sizeProfile?.inseamCm ?? ''}
+                placeholder={`e.g. ${UNIT_PLACEHOLDERS[measurementUnit].inseam}`}
+              />
+            </label>
+            <label>
+              Shoe size (EU)
+              <input name="shoeSizeEU" type="number" min="30" max="55" step="0.5" defaultValue={state.user.sizeProfile?.shoeSizeEU ?? ''} placeholder="e.g. 43" />
+            </label>
+          </div>
+
+          {/* Fit + Label sizes */}
           <div className="grid two">
             <label>
               Preferred fit

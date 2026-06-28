@@ -63,9 +63,13 @@ function computeSizeFitScore(product: ShoppingProduct, sizeProfile: UserSizeProf
     return { score: 50, notes: 'Add your size profile in Settings for personalised fit recommendations.' };
   }
 
+  const unit = sizeProfile.measurementUnit ?? 'cm';
+  const unitLabel = unit === 'in' ? 'inches' : 'centimeters';
+  const unitSuffix = ` (using your measurements in ${unitLabel})`;
+
   const sizes = product.availableSizes;
   if (sizes.length === 0) {
-    return { score: 45, notes: 'Size information unavailable for this product. Verify fit before purchasing.' };
+    return { score: 45, notes: `Size information unavailable for this product. Verify fit before purchasing.${unitSuffix}` };
   }
 
   const cat = (product.category ?? '').toLowerCase();
@@ -82,16 +86,16 @@ function computeSizeFitScore(product: ShoppingProduct, sizeProfile: UserSizeProf
   }
 
   if (!userSize) {
-    return { score: 50, notes: 'Complete your size profile in Settings for better fit confidence.' };
+    return { score: 50, notes: `Complete your size profile in Settings for better fit confidence.${unitSuffix}` };
   }
 
   const normalised = userSize.toUpperCase();
   const found = sizes.some(s => s.toUpperCase().includes(normalised) || normalised.includes(s.toUpperCase()));
   if (found) {
-    return { score: 88, notes: `Your size (${userSize}) appears to be available.` };
+    return { score: 88, notes: `Your size (${userSize}) appears to be available.${unitSuffix}` };
   }
 
-  return { score: 25, notes: `Your size (${userSize}) was not found in the available sizes: ${sizes.join(', ')}.` };
+  return { score: 25, notes: `Your size (${userSize}) was not found in the available sizes: ${sizes.join(', ')}.${unitSuffix}` };
 }
 
 function computeDuplicateRiskScore(product: ShoppingProduct, wardrobe: WardrobeItem[]): number {

@@ -12,7 +12,11 @@ export interface WeatherContext {
 
 export type PreferredFit = 'Slim' | 'Regular' | 'Relaxed' | 'Oversized';
 
+export type MeasurementUnit = 'cm' | 'in';
+
 export interface UserSizeProfile {
+  measurementUnit?: MeasurementUnit;
+  // Numeric measurements are stored in the unit indicated by measurementUnit (default: cm)
   heightCm?: number;
   weightKg?: number;
   chestCm?: number;
