@@ -29,12 +29,13 @@ export const runtime = 'nodejs';
 
 function metaContent(html: string, ...props: string[]): string | undefined {
   for (const prop of props) {
+    // property/name before content
     const m = html.match(
       new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i')
     ) ?? html.match(
       new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i')
     );
-    if (m?.[1]) return m[1].trim();
+    if (m?.[1]?.trim()) return m[1].trim();
   }
   return undefined;
 }
@@ -46,20 +47,36 @@ function extractTitle(html: string): string | undefined {
   return m?.[1]?.trim();
 }
 
+// Walk JSON-LD looking for a Product node (handles @graph, nested arrays)
+function findProductNode(obj: unknown): Record<string, unknown> | null {
+  if (!obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findProductNode(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  const typed = obj as Record<string, unknown>;
+  const type = typed['@type'];
+  const isProduct =
+    type === 'Product' ||
+    (Array.isArray(type) && (type as string[]).includes('Product'));
+  if (isProduct) return typed;
+  // Recurse into @graph
+  if (typed['@graph']) return findProductNode(typed['@graph']);
+  return null;
+}
+
 function extractJsonLd(html: string): Record<string, unknown> | null {
-  const matches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  const matches = html.matchAll(
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  );
   for (const m of matches) {
     try {
       const parsed: unknown = JSON.parse(m[1]);
-      const candidates: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
-      for (const item of candidates) {
-        if (item && typeof item === 'object' && '@type' in item) {
-          const typed = item as Record<string, unknown>;
-          if (typed['@type'] === 'Product' || (Array.isArray(typed['@type']) && (typed['@type'] as string[]).includes('Product'))) {
-            return typed;
-          }
-        }
-      }
+      const product = findProductNode(parsed);
+      if (product) return product;
     } catch {
       // malformed JSON-LD — skip
     }
@@ -67,17 +84,28 @@ function extractJsonLd(html: string): Record<string, unknown> | null {
   return null;
 }
 
-function extractPrice(html: string, jsonLd: Record<string, unknown> | null): { price?: number; currency?: string } {
-  // JSON-LD price
+function extractPrice(
+  html: string,
+  jsonLd: Record<string, unknown> | null
+): { price?: number; currency?: string } {
   if (jsonLd) {
-    const offers = jsonLd['offers'] as Record<string, unknown> | undefined;
-    if (offers) {
-      const price = parseFloat(String(offers['price'] ?? ''));
-      const currency = String(offers['priceCurrency'] ?? '');
-      if (!isNaN(price)) return { price, currency: currency || undefined };
+    const offers = jsonLd['offers'];
+    // offers may be a single object or an array — take first available
+    const offerArr: Record<string, unknown>[] = Array.isArray(offers)
+      ? (offers as Record<string, unknown>[])
+      : offers
+      ? [offers as Record<string, unknown>]
+      : [];
+    for (const offer of offerArr) {
+      const raw = offer['price'];
+      const price = parseFloat(String(raw ?? ''));
+      if (!isNaN(price) && price > 0) {
+        const currency = String(offer['priceCurrency'] ?? '');
+        return { price, currency: currency || undefined };
+      }
     }
   }
-  // OG price
+  // OG product price
   const ogPrice = metaContent(html, 'product:price:amount', 'og:price:amount');
   const ogCurrency = metaContent(html, 'product:price:currency', 'og:price:currency');
   if (ogPrice) {
@@ -87,36 +115,169 @@ function extractPrice(html: string, jsonLd: Record<string, unknown> | null): { p
   return {};
 }
 
-function extractImages(html: string, jsonLd: Record<string, unknown> | null): string[] {
-  const images: string[] = [];
-  // JSON-LD images
-  if (jsonLd?.image) {
-    const raw = jsonLd.image;
-    if (typeof raw === 'string') images.push(raw);
-    else if (Array.isArray(raw)) images.push(...(raw as string[]).filter(s => typeof s === 'string'));
-  }
-  // OG image
-  const og = metaContent(html, 'og:image', 'twitter:image');
-  if (og && !images.includes(og)) images.push(og);
-  // Return only https images, max 3
-  return images.filter(u => u.startsWith('https://')).slice(0, 3);
+function ensureHttps(url: string): string | null {
+  if (url.startsWith('https://')) return url;
+  // Upgrade http to https for safety
+  if (url.startsWith('http://')) return 'https://' + url.slice(7);
+  // Absolute path without scheme — prepend https
+  if (url.startsWith('//')) return 'https:' + url;
+  return null;
 }
 
-function extractSizes(html: string, jsonLd: Record<string, unknown> | null): string[] {
-  if (jsonLd) {
-    const offers = jsonLd['offers'];
-    const arr = Array.isArray(offers) ? offers : offers ? [offers] : [];
-    const sizes: string[] = [];
-    for (const offer of arr as Record<string, unknown>[]) {
-      const size = offer['size'] ?? (offer['eligibleQuantity'] as Record<string, unknown> | undefined)?.['value'];
-      if (typeof size === 'string' && size.length < 20) sizes.push(size);
-    }
-    if (sizes.length > 0) return sizes;
+function extractImages(
+  html: string,
+  jsonLd: Record<string, unknown> | null,
+  pageUrl: string
+): string[] {
+  const seen = new Set<string>();
+  const images: string[] = [];
+
+  function push(url: string) {
+    const safe = ensureHttps(url);
+    if (safe && !seen.has(safe)) { seen.add(safe); images.push(safe); }
   }
-  // Try meta
+
+  // 1. JSON-LD image
+  if (jsonLd?.image) {
+    const raw = jsonLd.image;
+    if (typeof raw === 'string') push(raw);
+    else if (Array.isArray(raw)) {
+      for (const item of raw as unknown[]) {
+        if (typeof item === 'string') push(item);
+        else if (item && typeof item === 'object') {
+          const src = (item as Record<string, unknown>)['url'] ?? (item as Record<string, unknown>)['contentUrl'];
+          if (typeof src === 'string') push(src);
+        }
+      }
+    } else if (typeof raw === 'object') {
+      const src = (raw as Record<string, unknown>)['url'] ?? (raw as Record<string, unknown>)['contentUrl'];
+      if (typeof src === 'string') push(src);
+    }
+  }
+
+  // 2. og:image (may appear multiple times)
+  const ogImagePattern = /<meta[^>]+(?:property)=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']*)["']/gi;
+  let ogMatch: RegExpExecArray | null;
+  while ((ogMatch = ogImagePattern.exec(html)) !== null && images.length < 5) {
+    push(ogMatch[1]);
+  }
+  // content-before-property variant
+  const ogImagePattern2 = /<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:image(?::secure_url)?["']/gi;
+  while ((ogMatch = ogImagePattern2.exec(html)) !== null && images.length < 5) {
+    push(ogMatch[1]);
+  }
+
+  // 3. Twitter card image
+  const tw = metaContent(html, 'twitter:image', 'twitter:image:src');
+  if (tw) push(tw);
+
+  // 4. Fallback: largest <img> in page that looks like a product image
+  if (images.length === 0) {
+    const imgPattern = /<img[^>]+src=["']([^"']*(?:product|item|pdp|detail)[^"']*)["']/gi;
+    let imgMatch: RegExpExecArray | null;
+    while ((imgMatch = imgPattern.exec(html)) !== null && images.length < 3) {
+      let src = imgMatch[1];
+      if (src.startsWith('/')) {
+        try { src = new URL(src, pageUrl).href; } catch { continue; }
+      }
+      push(src);
+    }
+  }
+
+  return images.slice(0, 5);
+}
+
+function extractAdditionalProperty(
+  jsonLd: Record<string, unknown>,
+  names: string[]
+): string | undefined {
+  const props = jsonLd['additionalProperty'];
+  if (!Array.isArray(props)) return undefined;
+  const lower = names.map(n => n.toLowerCase());
+  for (const p of props as Record<string, unknown>[]) {
+    const propName = String(p['name'] ?? '').toLowerCase();
+    if (lower.some(n => propName.includes(n))) {
+      return String(p['value'] ?? '') || undefined;
+    }
+  }
+  return undefined;
+}
+
+function extractSizes(
+  html: string,
+  jsonLd: Record<string, unknown> | null
+): string[] {
+  const sizes: string[] = [];
+
+  if (jsonLd) {
+    // From offers array with size property
+    const offers = jsonLd['offers'];
+    const offerArr = Array.isArray(offers) ? offers : offers ? [offers] : [];
+    for (const offer of offerArr as Record<string, unknown>[]) {
+      const size =
+        offer['size'] ??
+        (offer['eligibleQuantity'] as Record<string, unknown> | undefined)?.['value'] ??
+        (offer['itemOffered'] as Record<string, unknown> | undefined)?.['size'];
+      if (typeof size === 'string' && size.length > 0 && size.length < 25) {
+        if (!sizes.includes(size)) sizes.push(size);
+      }
+    }
+    if (sizes.length > 0) return sizes.slice(0, 20);
+
+    // From additionalProperty
+    const fromProp = extractAdditionalProperty(jsonLd, ['size', 'sizes']);
+    if (fromProp) return fromProp.split(/[,/|]/).map(s => s.trim()).filter(Boolean);
+  }
+
+  // Meta tag
   const sizeMeta = metaContent(html, 'product:size');
-  if (sizeMeta) return [sizeMeta];
+  if (sizeMeta) return sizeMeta.split(/[,/|]/).map(s => s.trim()).filter(Boolean);
+
   return [];
+}
+
+function extractCategory(
+  html: string,
+  jsonLd: Record<string, unknown> | null
+): string | undefined {
+  if (jsonLd) {
+    const cat = jsonLd['category'];
+    if (typeof cat === 'string' && cat.trim()) return cat.trim();
+    // breadcrumb can imply category
+    const bc = jsonLd['breadcrumb'];
+    if (bc && typeof bc === 'object') {
+      const items = (bc as Record<string, unknown>)['itemListElement'];
+      if (Array.isArray(items) && items.length >= 2) {
+        const last = items[items.length - 2] as Record<string, unknown>;
+        const name = last?.['name'] ?? (last?.['item'] as Record<string, unknown>)?.['name'];
+        if (typeof name === 'string') return name.trim();
+      }
+    }
+  }
+  return metaContent(html, 'product:category');
+}
+
+function extractBrand(
+  html: string,
+  jsonLd: Record<string, unknown> | null
+): string | undefined {
+  if (jsonLd) {
+    const brand = jsonLd['brand'];
+    if (typeof brand === 'string' && brand.trim()) return brand.trim();
+    if (brand && typeof brand === 'object') {
+      const name = (brand as Record<string, unknown>)['name'];
+      if (typeof name === 'string' && name.trim()) return name.trim();
+    }
+    const seller = jsonLd['seller'];
+    if (seller && typeof seller === 'object') {
+      const name = (seller as Record<string, unknown>)['name'];
+      if (typeof name === 'string' && name.trim()) return name.trim();
+    }
+  }
+  return (
+    metaContent(html, 'og:site_name') ??
+    metaContent(html, 'application-name')
+  );
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -135,7 +296,6 @@ export async function POST(req: Request) {
   const rawUrl = (body.url ?? '').trim();
   if (!rawUrl) return NextResponse.json({ error: 'url is required' }, { status: 400 });
 
-  // Validate URL — http/https only
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -151,21 +311,24 @@ export async function POST(req: Request) {
   let fetchOk = false;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 10_000);
     const res = await fetch(rawUrl, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; AURABot/1.0; +https://aura.app)',
-        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
       },
       redirect: 'follow',
     });
     clearTimeout(timeout);
     if (res.ok) {
-      // Only read text, limit to 512KB to avoid storing huge HTML
       const buf = await res.arrayBuffer();
-      html = new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 524_288));
+      // Limit to 768 KB — enough to capture <head> and early <body> with JSON-LD
+      html = new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 786_432));
       fetchOk = true;
     }
   } catch {
@@ -190,24 +353,36 @@ export async function POST(req: Request) {
       product,
       extractionStatus: status,
       missingFields: ['title', 'brand', 'price', 'category', 'color', 'material'],
-      warnings: ['Could not load the product page. Please enter the product details manually.'],
+      warnings: ['Product details could not be read automatically. Add the details manually.'],
     });
   }
 
-  // Parse
+  // Parse — priority: JSON-LD → OG/Twitter → HTML meta
   const jsonLd = extractJsonLd(html);
   const { price, currency } = extractPrice(html, jsonLd);
-  const images = extractImages(html, jsonLd);
+  const images = extractImages(html, jsonLd, rawUrl);
   const sizes = extractSizes(html, jsonLd);
 
-  const title = (jsonLd?.['name'] as string | undefined) ?? extractTitle(html);
-  const brand = (jsonLd?.['brand'] as Record<string, unknown> | undefined)?.['name'] as string | undefined
-    ?? metaContent(html, 'og:site_name');
-  const description = (jsonLd?.['description'] as string | undefined)
-    ?? metaContent(html, 'og:description', 'description');
-  const color = (jsonLd?.['color'] as string | undefined)
-    ?? metaContent(html, 'product:color');
-  const material = (jsonLd?.['material'] as string | undefined);
+  const title =
+    (jsonLd?.['name'] as string | undefined)?.trim() ??
+    extractTitle(html);
+
+  const brand = extractBrand(html, jsonLd);
+
+  const description =
+    (jsonLd?.['description'] as string | undefined)?.trim() ??
+    metaContent(html, 'og:description', 'twitter:description', 'description');
+
+  const color =
+    (jsonLd?.['color'] as string | undefined)?.trim() ??
+    extractAdditionalProperty(jsonLd ?? {}, ['color', 'colour']) ??
+    metaContent(html, 'product:color');
+
+  const material =
+    (jsonLd?.['material'] as string | undefined)?.trim() ??
+    extractAdditionalProperty(jsonLd ?? {}, ['material', 'fabric', 'composition']);
+
+  const category = extractCategory(html, jsonLd);
 
   const missingFields: string[] = [];
   if (!title) missingFields.push('title');
@@ -216,9 +391,16 @@ export async function POST(req: Request) {
   if (!color) missingFields.push('color');
   if (!material) missingFields.push('material');
 
-  // Determine source
-  const source = jsonLd ? 'json_ld' : images.length > 0 ? 'open_graph' : 'metadata';
-  status = missingFields.length >= 3 ? 'partial' : 'success';
+  // Extraction source quality
+  const source = jsonLd
+    ? 'json_ld'
+    : images.length > 0
+    ? 'open_graph'
+    : 'metadata';
+
+  // partial if 3+ core fields missing AND no image; success if we have at minimum title + image
+  const hasCore = !!(title && images.length > 0);
+  status = hasCore ? (missingFields.length >= 4 ? 'partial' : 'success') : missingFields.length >= 3 ? 'partial' : 'success';
 
   product = {
     id: uid(),
@@ -227,9 +409,10 @@ export async function POST(req: Request) {
     brand: brand ?? undefined,
     price,
     currency: currency ?? undefined,
+    category: category ?? undefined,
     color: color ?? undefined,
     material: material ?? undefined,
-    description: description?.slice(0, 500) ?? undefined,
+    description: description?.slice(0, 600) ?? undefined,
     imageUrls: images,
     availableSizes: sizes,
     sizeGuide: {},
@@ -240,8 +423,10 @@ export async function POST(req: Request) {
   };
 
   const warnings: string[] = [];
-  if (missingFields.length > 0) {
-    warnings.push(`Some fields could not be extracted: ${missingFields.join(', ')}. You can fill these in manually.`);
+  if (missingFields.length > 0 && missingFields.length < 5) {
+    warnings.push(
+      `Some details could not be extracted automatically: ${missingFields.join(', ')}. You can add them manually.`
+    );
   }
 
   return NextResponse.json({ product, extractionStatus: status, missingFields, warnings });
