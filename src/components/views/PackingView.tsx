@@ -4,6 +4,23 @@ import React, { useState } from 'react';
 import { useAura } from '@/store';
 import type { TripPlan, PackingItem } from '@/lib/types';
 
+// ── Country list ───────────────────────────────────────────────────────────
+
+const COUNTRIES = [
+  'Australia', 'Austria', 'Bahrain', 'Belgium', 'Brazil', 'Bulgaria',
+  'Canada', 'Chile', 'China', 'Colombia', 'Croatia', 'Cyprus',
+  'Czech Republic', 'Denmark', 'Egypt', 'Ethiopia', 'Finland', 'France',
+  'Germany', 'Ghana', 'Greece', 'Hong Kong', 'Hungary', 'India',
+  'Indonesia', 'Ireland', 'Italy', 'Japan', 'Jordan', 'Kenya',
+  'Kuwait', 'Lebanon', 'Malaysia', 'Maldives', 'Malta', 'Mexico',
+  'Morocco', 'Netherlands', 'New Zealand', 'Nigeria', 'Norway', 'Oman',
+  'Pakistan', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar',
+  'Romania', 'Rwanda', 'Saudi Arabia', 'Singapore', 'South Africa',
+  'South Korea', 'Spain', 'Sri Lanka', 'Sweden', 'Switzerland', 'Taiwan',
+  'Tanzania', 'Thailand', 'Tunisia', 'Turkey', 'UAE', 'Ukraine',
+  'United Kingdom', 'United States', 'Vietnam',
+].sort();
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function formatDate(iso: string): string {
@@ -449,6 +466,10 @@ interface FormState {
   laundryAvailable: boolean;
 }
 
+function fieldError(msg: string) {
+  return <span style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(160,60,60,0.9)', marginTop: '4px' }}>{msg}</span>;
+}
+
 function TripForm({ onSubmit, loading, error }: {
   onSubmit: (form: FormState) => Promise<void>;
   loading: boolean;
@@ -466,10 +487,26 @@ function TripForm({ onSubmit, loading, error }: {
     luggageType: 'Checked bag',
     laundryAvailable: false,
   });
+  const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
 
   function handleChange(field: keyof FormState, value: string | boolean) {
     setForm(f => ({ ...f, [field]: value }));
   }
+  function touch(field: keyof FormState) {
+    setTouched(t => ({ ...t, [field]: true }));
+  }
+
+  const cityError = touched.destinationCity && form.destinationCity.trim().length < 2
+    ? 'City is required.' : null;
+  const countryError = touched.destinationCountry && !form.destinationCountry
+    ? 'Please select a country.' : null;
+  const dateError = touched.endDate && form.endDate < form.startDate
+    ? 'End date must be on or after start date.' : null;
+
+  const isValid = form.destinationCity.trim().length >= 2
+    && form.destinationCountry.length > 0
+    && form.startDate.length > 0
+    && form.endDate >= form.startDate;
 
   return (
     <div className="card" style={{ maxWidth: '520px', margin: '0 auto', padding: '1.5rem' }}>
@@ -486,6 +523,8 @@ function TripForm({ onSubmit, loading, error }: {
         className="form"
         onSubmit={async e => {
           e.preventDefault();
+          setTouched({ destinationCity: true, destinationCountry: true, startDate: true, endDate: true });
+          if (!isValid) return;
           await onSubmit(form);
         }}
       >
@@ -493,19 +532,26 @@ function TripForm({ onSubmit, loading, error }: {
           <label style={{ gridColumn: '1 / -1' }}>
             Destination city *
             <input
-              required
               value={form.destinationCity}
               onChange={e => handleChange('destinationCity', e.target.value)}
+              onBlur={() => touch('destinationCity')}
               placeholder="e.g. Paris"
+              style={cityError ? { borderColor: 'rgba(160,60,60,0.5)' } : undefined}
             />
+            {cityError && fieldError(cityError)}
           </label>
           <label>
-            Country
-            <input
+            Country *
+            <select
               value={form.destinationCountry}
               onChange={e => handleChange('destinationCountry', e.target.value)}
-              placeholder="e.g. France"
-            />
+              onBlur={() => touch('destinationCountry')}
+              style={countryError ? { borderColor: 'rgba(160,60,60,0.5)' } : undefined}
+            >
+              <option value="">Select country</option>
+              {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {countryError && fieldError(countryError)}
           </label>
           <label>
             Purpose
@@ -522,20 +568,22 @@ function TripForm({ onSubmit, loading, error }: {
             Start date *
             <input
               type="date"
-              required
               value={form.startDate}
               onChange={e => handleChange('startDate', e.target.value)}
+              onBlur={() => touch('startDate')}
             />
           </label>
           <label>
             End date *
             <input
               type="date"
-              required
               value={form.endDate}
               min={form.startDate}
               onChange={e => handleChange('endDate', e.target.value)}
+              onBlur={() => touch('endDate')}
+              style={dateError ? { borderColor: 'rgba(160,60,60,0.5)' } : undefined}
             />
+            {dateError && fieldError(dateError)}
           </label>
           <label style={{ gridColumn: '1 / -1' }}>
             Luggage type
@@ -558,7 +606,12 @@ function TripForm({ onSubmit, loading, error }: {
           <span style={{ fontSize: '0.875rem' }}>Laundry available at destination</span>
         </label>
 
-        <button className="primary" type="submit" disabled={loading} style={{ marginTop: '1rem' }}>
+        <button
+          className="primary"
+          type="submit"
+          disabled={loading}
+          style={{ marginTop: '1rem', opacity: loading ? 0.7 : 1 }}
+        >
           {loading ? 'Generating plan…' : 'Generate Packing Plan'}
         </button>
       </form>

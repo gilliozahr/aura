@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuraServerClient } from '@/lib/supabase/server';
 import { generatePackingPlan } from '@/lib/packing/engine';
+import { isValidItemName } from '@/lib/utils';
 import type {
   WardrobeItem,
   StyleDNAProfile,
@@ -182,8 +183,30 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as RequestBody;
     const { destinationCity, destinationCountry, startDate, endDate, purpose, occasions, luggageType, laundryAvailable } = body;
 
-    if (!destinationCity || !startDate || !endDate) {
-      return NextResponse.json({ error: 'Missing required fields: destinationCity, startDate, endDate' }, { status: 400 });
+    const cityTrimmed = (destinationCity ?? '').trim();
+    const countryTrimmed = (destinationCountry ?? '').trim();
+
+    if (cityTrimmed.length < 2) {
+      return NextResponse.json({ error: 'Destination city is required (minimum 2 characters).' }, { status: 400 });
+    }
+    if (countryTrimmed.length < 2) {
+      return NextResponse.json({ error: 'Destination country is required.' }, { status: 400 });
+    }
+    if (!startDate || !endDate) {
+      return NextResponse.json({ error: 'Start date and end date are required.' }, { status: 400 });
+    }
+
+    const startMs = new Date(startDate).getTime();
+    const endMs = new Date(endDate).getTime();
+    if (isNaN(startMs) || isNaN(endMs)) {
+      return NextResponse.json({ error: 'Invalid date format.' }, { status: 400 });
+    }
+    if (endMs < startMs) {
+      return NextResponse.json({ error: 'End date must be on or after start date.' }, { status: 400 });
+    }
+    const tripDuration = Math.round((endMs - startMs) / 86_400_000) + 1;
+    if (tripDuration > 30) {
+      return NextResponse.json({ error: 'Trip duration cannot exceed 30 days.' }, { status: 400 });
     }
 
     // Load wardrobe
@@ -192,18 +215,20 @@ export async function POST(request: NextRequest) {
       .select('*')
       .eq('user_id', user.id);
 
-    const wardrobe: WardrobeItem[] = ((wardrobeRows ?? []) as unknown as WardrobeRow[]).map(r => ({
-      id: r.id,
-      name: r.name,
-      category: r.category,
-      color: r.color,
-      season: r.season,
-      occasion: r.occasion,
-      style: r.style,
-      wears: r.wears,
-      confidence: r.confidence,
-      image: r.image_url,
-    }));
+    const wardrobe: WardrobeItem[] = ((wardrobeRows ?? []) as unknown as WardrobeRow[])
+      .map(r => ({
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        color: r.color,
+        season: r.season,
+        occasion: r.occasion,
+        style: r.style,
+        wears: r.wears,
+        confidence: r.confidence,
+        image: r.image_url,
+      }))
+      .filter(w => isValidItemName(w.name));
 
     // Load style DNA
     const { data: dnaRow } = await supabase
@@ -256,7 +281,9 @@ export async function POST(request: NextRequest) {
 
     const aiEnhanced = enhancement !== null;
     const finalPlan = {
-      dailyOutfits: enhancement?.dailyOutfits ?? baseline.dailyOutfits,
+      // Always use baseline dailyOutfits — they have the exact trip dates.
+      // AI enhancement may hallucinate dates so we never trust it for this field.
+      dailyOutfits: baseline.dailyOutfits,
       packingItems: enhancement?.packingItems ?? baseline.packingItems,
       missingItems: enhancement?.missingItems ?? baseline.missingItems,
       riskNotes: enhancement?.riskNotes ?? baseline.riskNotes,
