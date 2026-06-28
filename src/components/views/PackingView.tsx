@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAura } from '@/store';
 import type { TripPlan, PackingItem } from '@/lib/types';
 
@@ -466,12 +466,21 @@ interface FormState {
   laundryAvailable: boolean;
 }
 
+interface CityLookupResult {
+  matched: boolean;
+  country?: string;
+  countryCode?: string;
+  latitude?: number;
+  longitude?: number;
+  source?: string;
+}
+
 function fieldError(msg: string) {
   return <span style={{ display: 'block', fontSize: '0.75rem', color: 'rgba(160,60,60,0.9)', marginTop: '4px' }}>{msg}</span>;
 }
 
 function TripForm({ onSubmit, loading, error }: {
-  onSubmit: (form: FormState) => Promise<void>;
+  onSubmit: (form: FormState & { detectedLatitude?: number; detectedLongitude?: number }) => Promise<void>;
   loading: boolean;
   error: string | null;
 }) {
@@ -488,13 +497,60 @@ function TripForm({ onSubmit, loading, error }: {
     laundryAvailable: false,
   });
   const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
+  const [lookup, setLookup] = useState<CityLookupResult | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  // Track if country was manually changed after auto-detect so we don't re-override
+  const [countryManuallySet, setCountryManuallySet] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detectedCoordsRef = useRef<{ lat?: number; lon?: number }>({});
 
   function handleChange(field: keyof FormState, value: string | boolean) {
     setForm(f => ({ ...f, [field]: value }));
+    if (field === 'destinationCountry') {
+      setCountryManuallySet(true);
+    }
   }
   function touch(field: keyof FormState) {
     setTouched(t => ({ ...t, [field]: true }));
   }
+
+  // Debounced city lookup
+  useEffect(() => {
+    const city = form.destinationCity.trim();
+    if (city.length < 2) {
+      setLookup(null);
+      detectedCoordsRef.current = {};
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLookupLoading(true);
+      try {
+        const res = await fetch(`/api/location/lookup?city=${encodeURIComponent(city)}`);
+        if (res.ok) {
+          const data = (await res.json()) as CityLookupResult;
+          setLookup(data);
+          if (data.matched && data.country && !countryManuallySet) {
+            setForm(f => ({ ...f, destinationCountry: data.country! }));
+            setTouched(t => ({ ...t, destinationCountry: true }));
+          }
+          detectedCoordsRef.current = {
+            lat: data.latitude,
+            lon: data.longitude,
+          };
+        }
+      } catch {
+        // silently ignore — user can select country manually
+      } finally {
+        setLookupLoading(false);
+      }
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  // countryManuallySet intentionally excluded — we only want to run on city changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.destinationCity]);
 
   const cityError = touched.destinationCity && form.destinationCity.trim().length < 2
     ? 'City is required.' : null;
@@ -507,6 +563,20 @@ function TripForm({ onSubmit, loading, error }: {
     && form.destinationCountry.length > 0
     && form.startDate.length > 0
     && form.endDate >= form.startDate;
+
+  // Helper text below the country field
+  function countryHint() {
+    if (lookupLoading) {
+      return <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--muted)', marginTop: '4px' }}>Detecting country…</span>;
+    }
+    if (lookup?.matched && lookup.country) {
+      return <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(80,120,80,0.9)', marginTop: '4px' }}>Detected: {lookup.country}</span>;
+    }
+    if (lookup && !lookup.matched && form.destinationCity.trim().length >= 2) {
+      return <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--muted)', marginTop: '4px' }}>Select country manually</span>;
+    }
+    return null;
+  }
 
   return (
     <div className="card" style={{ maxWidth: '520px', margin: '0 auto', padding: '1.5rem' }}>
@@ -525,7 +595,11 @@ function TripForm({ onSubmit, loading, error }: {
           e.preventDefault();
           setTouched({ destinationCity: true, destinationCountry: true, startDate: true, endDate: true });
           if (!isValid) return;
-          await onSubmit(form);
+          await onSubmit({
+            ...form,
+            detectedLatitude: detectedCoordsRef.current.lat,
+            detectedLongitude: detectedCoordsRef.current.lon,
+          });
         }}
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -533,7 +607,12 @@ function TripForm({ onSubmit, loading, error }: {
             Destination city *
             <input
               value={form.destinationCity}
-              onChange={e => handleChange('destinationCity', e.target.value)}
+              onChange={e => {
+                handleChange('destinationCity', e.target.value);
+                // Reset manual override when city changes so lookup can auto-fill again
+                setCountryManuallySet(false);
+                setLookup(null);
+              }}
               onBlur={() => touch('destinationCity')}
               placeholder="e.g. Paris"
               style={cityError ? { borderColor: 'rgba(160,60,60,0.5)' } : undefined}
@@ -551,7 +630,7 @@ function TripForm({ onSubmit, loading, error }: {
               <option value="">Select country</option>
               {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {countryError && fieldError(countryError)}
+            {countryError ? fieldError(countryError) : countryHint()}
           </label>
           <label>
             Purpose
@@ -636,7 +715,7 @@ export default function PackingView() {
 
   const selectedPlan = tripPlans.find(p => p.id === selectedPlanId) ?? null;
 
-  async function handleGeneratePlan(form: FormState) {
+  async function handleGeneratePlan(form: FormState & { detectedLatitude?: number; detectedLongitude?: number }) {
     setLoading(true);
     setError(null);
     try {
@@ -646,6 +725,8 @@ export default function PackingView() {
         body: JSON.stringify({
           destinationCity: form.destinationCity,
           destinationCountry: form.destinationCountry || undefined,
+          destinationLatitude: form.detectedLatitude,
+          destinationLongitude: form.detectedLongitude,
           startDate: form.startDate,
           endDate: form.endDate,
           purpose: form.purpose,

@@ -16,6 +16,8 @@ import type {
 interface RequestBody {
   destinationCity: string;
   destinationCountry?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
   startDate: string;
   endDate: string;
   purpose: string;
@@ -53,9 +55,17 @@ interface StyleDNARow {
 }
 
 
-async function fetchWeather(city: string, baseUrl: string): Promise<TravelWeather | undefined> {
+async function fetchWeather(
+  city: string,
+  baseUrl: string,
+  lat?: number,
+  lon?: number,
+): Promise<TravelWeather | undefined> {
   try {
-    const url = `${baseUrl}/api/weather/current?city=${encodeURIComponent(city)}`;
+    const params = lat !== undefined && lon !== undefined
+      ? `lat=${lat}&lon=${lon}&city=${encodeURIComponent(city)}`
+      : `city=${encodeURIComponent(city)}`;
+    const url = `${baseUrl}/api/weather/current?${params}`;
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return undefined;
     const data = (await res.json()) as Record<string, unknown>;
@@ -181,7 +191,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as RequestBody;
-    const { destinationCity, destinationCountry, startDate, endDate, purpose, occasions, luggageType, laundryAvailable } = body;
+    const { destinationCity, destinationCountry, destinationLatitude, destinationLongitude, startDate, endDate, purpose, occasions, luggageType, laundryAvailable } = body;
 
     const cityTrimmed = (destinationCity ?? '').trim();
     const countryTrimmed = (destinationCountry ?? '').trim();
@@ -257,9 +267,9 @@ export async function POST(request: NextRequest) {
         })()
       : undefined;
 
-    // Fetch weather
+    // Fetch weather — use lat/lon from city lookup when available for better accuracy
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const weather = await fetchWeather(destinationCity, baseUrl);
+    const weather = await fetchWeather(destinationCity, baseUrl, destinationLatitude, destinationLongitude);
 
     const trip = { destinationCity, destinationCountry, startDate, endDate, purpose, occasions: occasions ?? [], luggageType, laundryAvailable };
 
