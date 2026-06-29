@@ -42,6 +42,13 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function normalizeError(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string' && err) return err;
+  // Catches DOM Event objects thrown from onError handlers
+  return fallback;
+}
+
 function isProductSufficient(product: ShoppingProduct): boolean {
   const hasTitle = !!(product.title && product.title.length > 3);
   const hasContent = !!(
@@ -150,7 +157,12 @@ function ProductImage({
                 src={u}
                 alt=""
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                onError={e => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
+                onError={e => {
+                  try {
+                    const parent = (e.currentTarget as HTMLImageElement | null)?.parentElement;
+                    if (parent) parent.style.display = 'none';
+                  } catch { /* ignore — thumbnail already hidden */ }
+                }}
               />
             </button>
           ))}
@@ -894,8 +906,7 @@ export default function ShoppingView() {
         await runAnalysis(product);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Extraction failed';
-      toast(`Error: ${msg}`);
+      toast(`Error: ${normalizeError(err, 'Product details could not be read.')}`);
       setPhase('idle');
     }
   }
@@ -922,8 +933,7 @@ export default function ShoppingView() {
       dispatch({ type: 'ADD_SHOPPING_PRODUCT', payload: product });
       dispatch({ type: 'ADD_SHOPPING_RECOMMENDATION', payload: rec });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Analysis failed';
-      toast(`Error: ${msg}`);
+      toast(`Error: ${normalizeError(err, 'Analysis failed.')}`);
       setPhase('idle');
     }
   }
@@ -943,8 +953,7 @@ export default function ShoppingView() {
       setSiteRec(data.recommendation);
       setPhase('site_done');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Recommendation failed';
-      toast(`Error: ${msg}`);
+      toast(`Error: ${normalizeError(err, 'Recommendation failed.')}`);
       setPhase('choice');
     }
   }
