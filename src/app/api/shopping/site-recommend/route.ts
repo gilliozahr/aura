@@ -41,6 +41,75 @@ function capitaliseDomain(domain: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+// ── DB row normalizers ────────────────────────────────────────────────────────
+
+// style_dna_profiles uses snake_case columns — map to camelCase StyleDNAProfile
+function normalizeStyleDNA(row: Record<string, unknown>): StyleDNAProfile {
+  return {
+    preferredColors: (row.preferred_colors as StyleDNAProfile['preferredColors']) ?? [],
+    avoidedColors: (row.avoided_colors as StyleDNAProfile['avoidedColors']) ?? [],
+    preferredCategories: (row.preferred_categories as StyleDNAProfile['preferredCategories']) ?? [],
+    preferredStyleTags: (row.preferred_style_tags as StyleDNAProfile['preferredStyleTags']) ?? [],
+    avoidedStyleTags: (row.avoided_style_tags as StyleDNAProfile['avoidedStyleTags']) ?? [],
+    preferredOccasions: (row.preferred_occasions as StyleDNAProfile['preferredOccasions']) ?? [],
+    wardrobeGaps: (row.wardrobe_gaps as string[]) ?? [],
+    favoriteOutfitPatterns: (row.favorite_outfit_patterns as string[]) ?? [],
+    rejectedOutfitPatterns: (row.rejected_outfit_patterns as string[]) ?? [],
+    confidenceScore: (row.confidence_score as number) ?? 0,
+    signalCount: (row.signal_count as number) ?? 0,
+    lastComputedAt: (row.last_computed_at as string) ?? new Date().toISOString(),
+  };
+}
+
+// size_profile is stored as camelCase JSONB (saved directly from UserSizeProfile)
+// but tolerate snake_case keys as a fallback
+function normalizeSizeProfile(raw: unknown): UserSizeProfile | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  if (Object.keys(r).length === 0) return undefined;
+
+  // Prefer camelCase, fall back to snake_case variants
+  return {
+    measurementUnit: (r.measurementUnit ?? r.measurement_unit) as UserSizeProfile['measurementUnit'] | undefined,
+    heightCm: (r.heightCm ?? r.height_cm ?? r.height) as number | undefined,
+    weightKg: (r.weightKg ?? r.weight_kg ?? r.weight) as number | undefined,
+    chestCm: (r.chestCm ?? r.chest_cm ?? r.chest) as number | undefined,
+    waistCm: (r.waistCm ?? r.waist_cm ?? r.waist) as number | undefined,
+    hipsCm: (r.hipsCm ?? r.hips_cm ?? r.hips) as number | undefined,
+    shoulderCm: (r.shoulderCm ?? r.shoulder_cm ?? r.shoulder) as number | undefined,
+    inseamCm: (r.inseamCm ?? r.inseam_cm ?? r.inseam) as number | undefined,
+    neckCm: (r.neckCm ?? r.neck_cm ?? r.neck) as number | undefined,
+    sleeveCm: (r.sleeveCm ?? r.sleeve_cm ?? r.sleeve) as number | undefined,
+    shoeSizeEU: (r.shoeSizeEU ?? r.shoe_size_eu ?? r.shoeSize) as number | undefined,
+    shoeSizeUK: (r.shoeSizeUK ?? r.shoe_size_uk) as number | undefined,
+    shoeSizeUS: (r.shoeSizeUS ?? r.shoe_size_us) as number | undefined,
+    preferredFit: (r.preferredFit ?? r.preferred_fit) as UserSizeProfile['preferredFit'] | undefined,
+    topSize: (r.topSize ?? r.top_size) as string | undefined,
+    bottomSize: (r.bottomSize ?? r.bottom_size) as string | undefined,
+    blazerSize: (r.blazerSize ?? r.blazer_size) as string | undefined,
+    notes: r.notes as string | undefined,
+  };
+}
+
+// ── Supabase client factory ───────────────────────────────────────────────────
+
+async function makeSupabase() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(toSet) {
+          try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
+          catch { /* read-only in Server Component */ }
+        },
+      },
+    }
+  );
+}
+
 // ── Deterministic recommendation ──────────────────────────────────────────────
 
 function buildDeterministicRec(
@@ -53,7 +122,7 @@ function buildDeterministicRec(
 ): ShoppingSiteRecommendation {
   const brandName = capitaliseDomain(domain);
 
-  // Focus categories: wardrobe gaps first, then under-represented categories
+  // Focus categories: wardrobe gaps first, then under-represented
   const gaps = styleDNA?.wardrobeGaps ?? [];
   const focusCategories: string[] = [...gaps.slice(0, 3)];
   if (focusCategories.length === 0) {
@@ -88,27 +157,34 @@ function buildDeterministicRec(
     }
   }
 
-  // Style notes
+  // Style notes — use real data when available
   const prefColors = styleDNA?.preferredColors.slice(0, 3).map(e => e.value) ?? [];
   const prefStyles = styleDNA?.preferredStyleTags.slice(0, 3).map(e => e.value) ?? [];
   const avoidStyles = styleDNA?.avoidedStyleTags.slice(0, 2).map(e => e.value) ?? [];
   const styleParts: string[] = [];
+  if (styleDNA) {
+    const conf = styleDNA.confidenceScore;
+    const confLabel = conf >= 70 ? 'high' : conf >= 40 ? 'moderate' : 'building';
+    styleParts.push(`Style DNA confidence: ${conf}/100 (${confLabel}).`);
+  }
   if (prefColors.length > 0) styleParts.push(`Look for ${prefColors.join(', ')} colourways.`);
   if (prefStyles.length > 0) styleParts.push(`Your Style DNA favours ${prefStyles.join(', ')}.`);
   if (avoidStyles.length > 0) styleParts.push(`Avoid ${avoidStyles.join(', ')} styles.`);
   const styleNotes = styleParts.join(' ') ||
     'Complete your Style DNA in Settings for personalised colour and style guidance.';
 
-  // Size notes
+  // Size notes — use fit profile when available, without exposing body measurements
   let sizeNotes: string;
   if (sizeProfile) {
-    const parts: string[] = [];
-    if (sizeProfile.topSize) parts.push(`top ${sizeProfile.topSize}`);
-    if (sizeProfile.bottomSize) parts.push(`bottom ${sizeProfile.bottomSize}`);
-    if (sizeProfile.shoeSizeEU) parts.push(`EU shoe ${sizeProfile.shoeSizeEU}`);
-    sizeNotes = parts.length > 0
-      ? `Your sizes: ${parts.join(', ')}. Confirm with the brand's size guide before ordering.`
-      : 'Add your sizes in Settings for fit guidance.';
+    const fitParts: string[] = [];
+    if (sizeProfile.preferredFit) fitParts.push(`${sizeProfile.preferredFit} fit`);
+    if (sizeProfile.topSize) fitParts.push(`top ${sizeProfile.topSize}`);
+    if (sizeProfile.bottomSize) fitParts.push(`bottom ${sizeProfile.bottomSize}`);
+    if (sizeProfile.blazerSize) fitParts.push(`blazer ${sizeProfile.blazerSize}`);
+    if (sizeProfile.shoeSizeEU) fitParts.push(`EU shoe ${sizeProfile.shoeSizeEU}`);
+    sizeNotes = fitParts.length > 0
+      ? `Saved fit profile: ${fitParts.join(', ')}. Check the brand's size guide — sizing can vary.`
+      : 'Add your clothing sizes in Settings for fit guidance.';
   } else {
     sizeNotes = 'Add your size profile in Settings for personalised fit guidance.';
   }
@@ -145,10 +221,11 @@ function buildDeterministicRec(
       ? `Confidence is based on ${styleDNA.signalCount} style signals.`
       : 'Build your Style DNA by rating outfits for better guidance.');
 
+  // Confidence: base 50, +up to 30 from styleDNA, +10 if sizeProfile, +10 if gaps found
   const confidenceScore = Math.min(
     50 +
     (styleDNA ? Math.min(Math.round(styleDNA.confidenceScore / 2), 30) : 0) +
-    (sizeProfile ? 10 : 0) +
+    (sizeProfile && (sizeProfile.topSize || sizeProfile.bottomSize || sizeProfile.shoeSizeEU) ? 10 : 0) +
     (gaps.length > 0 ? 10 : 0),
     95
   );
@@ -193,20 +270,7 @@ export async function POST(req: Request) {
   // ── Auth ──────────────────────────────────────────────────────────────────
   let userId: string | null = null;
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(toSet) {
-            try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
-            catch { /* read-only in Server Component */ }
-          },
-        },
-      }
-    );
+    const supabase = await makeSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     userId = user.id;
@@ -223,26 +287,13 @@ export async function POST(req: Request) {
   let occasions: OccasionEvent[] = [];
 
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(toSet) {
-            try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
-            catch { /* read-only */ }
-          },
-        },
-      }
-    );
+    const supabase = await makeSupabase();
     const [
-      { data: wardrobeRows },
-      { data: profile },
-      { data: styleDNARow },
-      { data: tripRows },
-      { data: occasionRows },
+      { data: wardrobeRows, error: wErr },
+      { data: profile, error: pErr },
+      { data: styleDNARow, error: dErr },
+      { data: tripRows, error: tErr },
+      { data: occasionRows, error: oErr },
     ] = await Promise.all([
       supabase.from('wardrobe_items').select('*').eq('user_id', userId),
       supabase.from('user_profiles').select('size_profile').eq('id', userId).single(),
@@ -250,9 +301,21 @@ export async function POST(req: Request) {
       supabase.from('trip_plans').select('*').eq('user_id', userId),
       supabase.from('occasion_events').select('*').eq('user_id', userId),
     ]);
+
+    if (wErr) console.warn('[shopping/site-recommend] wardrobe query error', wErr.message);
+    if (pErr) console.warn('[shopping/site-recommend] profile query error', pErr.message);
+    if (dErr) console.warn('[shopping/site-recommend] style_dna query error', dErr.message);
+    if (tErr) console.warn('[shopping/site-recommend] trips query error', tErr.message);
+    if (oErr) console.warn('[shopping/site-recommend] occasions query error', oErr.message);
+
     wardrobe = (wardrobeRows ?? []) as WardrobeItem[];
-    sizeProfile = (profile?.size_profile ?? undefined) as UserSizeProfile | undefined;
-    styleDNA = (styleDNARow ?? undefined) as StyleDNAProfile | undefined;
+
+    // size_profile is stored as camelCase JSONB — normalize to handle both shapes
+    sizeProfile = normalizeSizeProfile(profile?.size_profile);
+
+    // style_dna_profiles uses snake_case columns — must normalize before use
+    styleDNA = styleDNARow ? normalizeStyleDNA(styleDNARow as Record<string, unknown>) : undefined;
+
     tripPlans = (tripRows ?? []) as TripPlan[];
     occasions = (occasionRows ?? []) as OccasionEvent[];
   } catch (err) {
@@ -261,8 +324,11 @@ export async function POST(req: Request) {
 
   console.log('[shopping/site-recommend] data loaded', {
     wardrobeCount: wardrobe.length,
-    hasStyleDNA: !!styleDNA,
-    hasSizeProfile: !!sizeProfile,
+    styleDnaFound: !!styleDNA,
+    styleDnaConfidence: styleDNA?.confidenceScore,
+    styleDnaSignalCount: styleDNA?.signalCount,
+    sizeProfileFound: !!sizeProfile,
+    sizeProfileKeys: sizeProfile ? Object.keys(sizeProfile).filter(k => (sizeProfile as Record<string, unknown>)[k] != null) : [],
     tripsCount: tripPlans.length,
     occasionsCount: occasions.length,
   });
@@ -273,7 +339,6 @@ export async function POST(req: Request) {
     rec = buildDeterministicRec(domain, wardrobe, styleDNA, sizeProfile, tripPlans, occasions);
   } catch (err) {
     console.warn('[shopping/site-recommend] deterministic build failed', normalizeServerError(err));
-    // Last-resort minimal rec so we never return 500
     rec = {
       domain,
       brandName: capitaliseDomain(domain),
