@@ -386,7 +386,7 @@ export async function POST(req: Request) {
       product,
       extractionStatus: status,
       missingFields: ['title', 'brand', 'price', 'category', 'color', 'material'],
-      warnings: ['Product details could not be read automatically. Add the details manually.'],
+      warnings: ['AURA could not read this product automatically. The website may be blocking product metadata. Choose how to continue.'],
     });
   }
 
@@ -450,7 +450,7 @@ export async function POST(req: Request) {
       product,
       extractionStatus: status,
       missingFields: ['title', 'brand', 'price', 'category', 'color', 'material'],
-      warnings: ['Product details could not be read from this link. Paste a direct product page or add the details manually.'],
+      warnings: ['AURA could not read this product automatically. The website may be blocking product metadata. Choose how to continue.'],
     });
   }
 

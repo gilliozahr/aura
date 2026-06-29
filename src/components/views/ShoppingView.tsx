@@ -174,23 +174,27 @@ function ProductImage({
 
 // ── ChoiceCard ────────────────────────────────────────────────────────────────
 
+type ChoiceContext = 'homepage' | 'product_failed';
+
 interface ChoiceCardProps {
   url: string;
+  context: ChoiceContext;
   onAnalyzeProduct: () => void;
   onSiteRecommend: () => void;
   onManual: () => void;
 }
 
-function ChoiceCard({ url, onAnalyzeProduct, onSiteRecommend, onManual }: ChoiceCardProps) {
+function ChoiceCard({ url, context, onAnalyzeProduct, onSiteRecommend, onManual }: ChoiceCardProps) {
   const host = hostOf(url);
+  const subtitle = context === 'homepage'
+    ? `Paste a direct product page to analyze an exact item, or choose website-level recommendations for ${host || 'this store'}.`
+    : `Product details could not be read from ${host ? `${host}` : 'this link'}. Choose how to proceed.`;
   return (
     <div className="card" style={{ marginTop: 16, border: '1.5px solid var(--line)' }}>
       <p className="eyebrow" style={{ marginBottom: 4 }}>What would you like AURA to do?</p>
-      {url && (
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.45 }}>
-          Product details could not be read from <strong>{host}</strong>. Choose how to proceed.
-        </p>
-      )}
+      <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.45 }}>
+        {subtitle}
+      </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Option 1 — specific product */}
@@ -202,10 +206,12 @@ function ChoiceCard({ url, onAnalyzeProduct, onSiteRecommend, onManual }: Choice
           }}
         >
           <p style={{ margin: '0 0 3px', fontWeight: 700, fontSize: 14 }}>
-            Analyze a specific product
+            {context === 'product_failed' ? 'Try a different product link' : 'Analyze a specific product'}
           </p>
           <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>
-            Paste the direct product page URL so AURA can read the item details.
+            {context === 'product_failed'
+              ? 'Paste a different product page URL — some brands share direct item links that work better.'
+              : 'Paste the direct product page URL so AURA can read the item details.'}
           </p>
           <button
             type="button"
@@ -213,7 +219,7 @@ function ChoiceCard({ url, onAnalyzeProduct, onSiteRecommend, onManual }: Choice
             style={{ fontSize: 13, padding: '6px 14px' }}
             onClick={onAnalyzeProduct}
           >
-            Paste product link
+            {context === 'product_failed' ? 'Try another link' : 'Paste product link'}
           </button>
         </div>
 
@@ -833,6 +839,7 @@ export default function ShoppingView() {
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
+  const [choiceContext, setChoiceContext] = useState<ChoiceContext>('homepage');
   const [currentProduct, setCurrentProduct] = useState<ShoppingProduct | null>(null);
   const [currentRec, setCurrentRec] = useState<ShoppingRecommendation | null>(null);
   const [siteRec, setSiteRec] = useState<ShoppingSiteRecommendation | null>(null);
@@ -865,6 +872,7 @@ export default function ShoppingView() {
       setCurrentProduct(null);
       setCurrentRec(null);
       setSiteRec(null);
+      setChoiceContext('homepage');
       setPhase('choice');
       return;
     }
@@ -891,6 +899,7 @@ export default function ShoppingView() {
       // Server-side homepage detection or blocked page → choice card
       if (res.status === 422 || data.extractionStatus === 'manual_required') {
         if (data.warnings?.length) setWarnings(data.warnings);
+        setChoiceContext(res.status === 422 ? 'homepage' : 'product_failed');
         setPhase('choice');
         return;
       }
@@ -902,14 +911,16 @@ export default function ShoppingView() {
 
       if (!isProductSufficient(product)) {
         setCurrentProduct(product);
+        setChoiceContext('product_failed');
         setPhase('choice');
       } else {
         await runAnalysis(product);
       }
     } catch (err) {
       // Always show choice card — never silently return to idle
+      setChoiceContext('product_failed');
       setPhase('choice');
-      setWarnings([normalizeError(err, 'Product details could not be read from this link.')]);
+      setWarnings([normalizeError(err, 'AURA could not read this product automatically. The website may be blocking product metadata. Choose how to continue.')]);
     }
   }
 
@@ -1003,6 +1014,7 @@ export default function ShoppingView() {
     setSiteRec(null);
     setPhase('idle');
     setWarnings([]);
+    setChoiceContext('homepage');
   }
 
   const isLoading = phase === 'extracting' || phase === 'analysing' || phase === 'site_loading';
@@ -1063,6 +1075,7 @@ export default function ShoppingView() {
       {phase === 'choice' && (
         <ChoiceCard
           url={urlInput}
+          context={choiceContext}
           onAnalyzeProduct={handleChoiceProduct}
           onSiteRecommend={() => void handleChoiceSiteRec()}
           onManual={handleChoiceManual}
