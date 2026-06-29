@@ -6,6 +6,8 @@ const NAV_ITEMS: { id: View; label: string }[] = [
   { id: 'home', label: 'Daily Briefing' },
   { id: 'wardrobe', label: 'Wardrobe' },
   { id: 'inspiration', label: 'AI Inspiration' },
+  { id: 'occasions', label: 'Occasions' },
+  { id: 'planner', label: 'Planner' },
   { id: 'packing', label: 'Packing' },
   { id: 'stylist', label: 'Stylist Network' },
   { id: 'analytics', label: 'Analytics' },
@@ -41,8 +43,8 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="sidebar-card">
-        <span className="eyebrow">v0.2 Foundation</span>
-        <p>Next.js · TypeScript · Supabase-ready · Agent OS</p>
+        <span className="eyebrow">v1.3.0 Preview</span>
+        <p>Next.js · TypeScript · Supabase · Smart Closet Calendar</p>
       </div>
     </aside>
   );

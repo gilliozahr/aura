@@ -31,6 +31,7 @@ export function defaultState(): AppState {
     orders: [],
     stylistBookings: [],
     feedback: [],
+    outfitPlans: [],
   };
 }
 

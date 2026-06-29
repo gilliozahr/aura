@@ -1,10 +1,14 @@
-import type { AppState } from '@/lib/types';
+import type { AppState, OutfitPlan } from '@/lib/types';
 import { LocalRepository } from './local';
 import { SupabaseRepository } from './supabase';
 
 export interface IRepository {
   loadState(): Promise<AppState>;
   saveState(state: AppState): Promise<void>;
+  getOutfitPlans(): Promise<OutfitPlan[]>;
+  saveOutfitPlan(plan: Omit<OutfitPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<OutfitPlan>;
+  updateOutfitPlan(planDate: string, updates: Partial<OutfitPlan>): Promise<OutfitPlan>;
+  deleteOutfitPlan(planDate: string): Promise<void>;
 }
 
 let _instance: IRepository | null = null;
