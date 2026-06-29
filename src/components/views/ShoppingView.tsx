@@ -497,21 +497,24 @@ function ProductCard({ product }: { product: ShoppingProduct }) {
             Available sizes
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {product.availableSizes.map(s => (
-              <span
-                key={s}
-                style={{
-                  padding: '3px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--line)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  background: 'rgba(255,255,255,.7)',
-                }}
-              >
-                {s}
-              </span>
-            ))}
+            {product.availableSizes
+              .flatMap(s => s.split(/[,\s/|]+/).map(t => t.trim()).filter(Boolean))
+              .filter((s, i, arr) => arr.indexOf(s) === i)
+              .map(s => (
+                <span
+                  key={s}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: 8,
+                    border: '1px solid var(--line)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background: 'rgba(255,255,255,.7)',
+                  }}
+                >
+                  {s}
+                </span>
+              ))}
           </div>
         </div>
       )}
@@ -547,24 +550,28 @@ function ProductCard({ product }: { product: ShoppingProduct }) {
           >
             {sourceLabel(product.extractionSource)}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{hostOf(product.url)}</span>
+          {product.extractionSource !== 'manual' && product.url && (
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{hostOf(product.url)}</span>
+          )}
         </div>
-        <a
-          href={product.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: 'var(--accent)',
-            textDecoration: 'none',
-            border: '1px solid var(--line)',
-            borderRadius: 10,
-            padding: '5px 12px',
-          }}
-        >
-          Open product page ↗
-        </a>
+        {product.url && /^https?:\/\//i.test(product.url) && product.extractionSource !== 'manual' && (
+          <a
+            href={product.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: 'var(--accent)',
+              textDecoration: 'none',
+              border: '1px solid var(--line)',
+              borderRadius: 10,
+              padding: '5px 12px',
+            }}
+          >
+            Open product page ↗
+          </a>
+        )}
       </div>
     </div>
   );
