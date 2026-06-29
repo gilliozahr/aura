@@ -212,22 +212,26 @@ function buildDeterministicRec(
     }
   }
 
-  // Reasoning
-  const focusStr = focusCategories.length > 0 ? focusCategories.join(' and ') : 'wardrobe essentials';
+  // Verdict / reasoning — specific, actionable, first-person AURA voice
+  const focusStr = focusCategories.length > 0 ? focusCategories.join(', ') : 'wardrobe essentials';
+  const avoidHint = avoidCategories.length > 0 ? ` Skip ${avoidCategories[0]}.` : '';
+  const signalHint = styleDNA
+    ? ` Based on ${styleDNA.signalCount} style signal${styleDNA.signalCount === 1 ? '' : 's'}.`
+    : ' Rate outfits in the Style section to improve guidance.';
   const reasoning =
-    `Based on your wardrobe and Style DNA, ${brandName} is worth browsing for ${focusStr}. ` +
-    (avoidCategories.length > 0 ? `Skip ${avoidCategories[0]}. ` : '') +
-    (styleDNA
-      ? `Confidence is based on ${styleDNA.signalCount} style signals.`
-      : 'Build your Style DNA by rating outfits for better guidance.');
+    `Browse ${brandName} selectively — good for ${focusStr}.${avoidHint}${signalHint}`;
 
-  // Confidence: base 50, +up to 30 from styleDNA, +10 if sizeProfile, +10 if gaps found
+  // Confidence: base 50, +up to 20 from styleDNA (capped lower for site-level), +10 sizes, +10 gaps, +5 occasions/trips
+  // Max 85 — site-level guidance is less precise than per-product analysis
+  const hasSizes = !!(sizeProfile && (sizeProfile.topSize || sizeProfile.bottomSize || sizeProfile.shoeSizeEU));
+  const hasUpcoming = occasionNotes.length > 0;
   const confidenceScore = Math.min(
     50 +
-    (styleDNA ? Math.min(Math.round(styleDNA.confidenceScore / 2), 30) : 0) +
-    (sizeProfile && (sizeProfile.topSize || sizeProfile.bottomSize || sizeProfile.shoeSizeEU) ? 10 : 0) +
-    (gaps.length > 0 ? 10 : 0),
-    95
+    (styleDNA ? Math.min(Math.round(styleDNA.confidenceScore / 5) * 2, 20) : 0) +
+    (hasSizes ? 10 : 0) +
+    (gaps.length > 0 ? 10 : 0) +
+    (hasUpcoming ? 5 : 0),
+    85
   );
 
   return {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
@@ -43,7 +43,17 @@ function formatDate(iso: string): string {
 }
 
 function normalizeError(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    // Map raw network/parse errors to user-friendly messages
+    const msg = err.message;
+    if (/failed to fetch|fetch failed|networkerror|load failed|econnrefused/i.test(msg)) {
+      return fallback;
+    }
+    if (/unexpected token|json|syntax/i.test(msg)) {
+      return fallback;
+    }
+    return msg;
+  }
   if (typeof err === 'string' && err) return err;
   // Catches DOM Event objects thrown from onError handlers
   return fallback;
@@ -286,136 +296,156 @@ function ChoiceCard({ url, context, onAnalyzeProduct, onSiteRecommend, onManual 
 
 // ── SiteRecommendationCard ────────────────────────────────────────────────────
 
+function SectionLabel({ color, children }: { color?: string; children: React.ReactNode }) {
+  return (
+    <p style={{
+      margin: '0 0 7px',
+      fontSize: 10,
+      fontWeight: 800,
+      color: color ?? 'var(--muted)',
+      textTransform: 'uppercase',
+      letterSpacing: '.09em',
+    }}>
+      {children}
+    </p>
+  );
+}
+
 function SiteRecommendationCard({ rec }: { rec: ShoppingSiteRecommendation }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <p className="eyebrow" style={{ marginBottom: 4 }}>Website-level recommendation</p>
-      <h3 style={{ margin: '0 0 2px' }}>{rec.brandName}</h3>
-      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)' }}>{rec.domain}</p>
 
-      <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 16 }}>
+      {/* Header */}
+      <p className="eyebrow" style={{ marginBottom: 4 }}>Website guidance</p>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 2, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0 }}>{rec.brandName}</h3>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{rec.domain}</span>
+      </div>
+
+      {/* Verdict */}
+      <p style={{
+        fontSize: 14,
+        color: 'var(--fg)',
+        lineHeight: 1.6,
+        marginTop: 12,
+        marginBottom: 20,
+        padding: '12px 16px',
+        background: 'var(--panel-2)',
+        borderRadius: 12,
+        borderLeft: '3px solid var(--accent)',
+      }}>
         {rec.reasoning}
       </p>
 
-      {/* Confidence bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <span style={{ fontSize: 13, color: 'var(--muted)', minWidth: 170, flexShrink: 0 }}>Guidance confidence</span>
-        <div style={{ flex: 1, height: 6, borderRadius: 999, background: 'var(--panel-2)', overflow: 'hidden' }}>
-          <div
-            style={{
-              height: '100%',
-              width: `${rec.confidenceScore}%`,
-              borderRadius: 999,
-              background: rec.confidenceScore >= 65 ? 'var(--good)' : 'var(--warn)',
-              transition: 'width .4s ease',
-            }}
-          />
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 700, width: 28, textAlign: 'right' }}>{rec.confidenceScore}</span>
-      </div>
-
-      {/* Focus categories */}
+      {/* Worth looking at + wardrobe gaps */}
       {rec.focusCategories.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--good)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-            Worth looking at
-          </p>
+        <div style={{ marginBottom: 16 }}>
+          <SectionLabel color="var(--good)">Worth looking at</SectionLabel>
           <div className="tags">
-            {rec.focusCategories.map(c => <span key={c} className="tag">{c}</span>)}
+            {rec.focusCategories.map(c => (
+              <span key={c} className="tag" style={{ background: 'rgba(36,107,69,.07)', borderColor: 'rgba(36,107,69,.18)' }}>
+                {c}
+              </span>
+            ))}
           </div>
-        </div>
-      )}
-
-      {/* Wardrobe gap matches */}
-      {rec.wardrobeGapMatches.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-            Could fill wardrobe gaps
-          </p>
-          <div className="tags">
-            {rec.wardrobeGapMatches.map(g => <span key={g} className="tag">{g}</span>)}
-          </div>
+          {rec.wardrobeGapMatches.length > 0 && (
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+              Could fill your gaps: {rec.wardrobeGapMatches.join(', ')}
+            </p>
+          )}
         </div>
       )}
 
       {/* Avoid */}
       {rec.avoidCategories.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: 'var(--bad)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-            Avoid
-          </p>
-          {rec.avoidCategories.map(c => (
-            <p key={c} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>· {c}</p>
-          ))}
+        <div style={{ marginBottom: 16 }}>
+          <SectionLabel color="var(--bad)">Skip</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {rec.avoidCategories.map(c => (
+              <p key={c} style={{ fontSize: 13, color: 'var(--muted)', margin: 0, lineHeight: 1.45 }}>
+                · {c}
+              </p>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Style notes */}
+      {/* Style + colour notes */}
       {rec.styleNotes && (
-        <div
-          style={{
-            fontSize: 13,
-            color: 'var(--muted)',
-            background: 'var(--panel-2)',
-            borderRadius: 10,
-            padding: '10px 14px',
-            marginBottom: 10,
-            lineHeight: 1.5,
-          }}
-        >
-          {rec.styleNotes}
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel>Colour &amp; style guidance</SectionLabel>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.55 }}>
+            {rec.styleNotes}
+          </p>
         </div>
       )}
 
-      {/* Size notes */}
+      {/* Fit notes */}
       {rec.sizeNotes && (
-        <div
-          style={{
-            fontSize: 13,
-            color: 'var(--muted)',
-            background: 'var(--panel-2)',
-            borderRadius: 10,
-            padding: '10px 14px',
-            marginBottom: 10,
-            lineHeight: 1.5,
-          }}
-        >
-          {rec.sizeNotes}
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel>Fit &amp; sizing</SectionLabel>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.55 }}>
+            {rec.sizeNotes}
+          </p>
         </div>
       )}
 
       {/* Occasion / trip notes */}
       {rec.occasionNotes.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          {rec.occasionNotes.map(n => (
-            <p key={n} style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0', lineHeight: 1.45 }}>· {n}</p>
-          ))}
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel>Upcoming occasions</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {rec.occasionNotes.map(n => (
+              <p key={n} style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.45 }}>· {n}</p>
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Confidence */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 190, flexShrink: 0 }}>
+            Website guidance confidence
+          </span>
+          <div style={{ flex: 1, height: 5, borderRadius: 999, background: 'var(--panel-2)', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${rec.confidenceScore}%`,
+                borderRadius: 999,
+                background: rec.confidenceScore >= 65 ? 'var(--good)' : 'var(--warn)',
+                transition: 'width .4s ease',
+              }}
+            />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, width: 28, textAlign: 'right' }}>
+            {rec.confidenceScore}
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
+          Website-level guidance only — exact product fit requires a direct product page or manual item details.
+        </p>
+      </div>
+
       {/* Footer */}
-      <div
-        style={{
-          marginTop: 12,
-          paddingTop: 12,
-          borderTop: '1px solid var(--line)',
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
+      <div style={{
+        paddingTop: 12,
+        borderTop: '1px solid var(--line)',
+        display: 'flex',
+        gap: 8,
+        flexWrap: 'wrap',
+        alignItems: 'center',
+      }}>
         {rec.aiEnhanced && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--accent)',
-              background: 'rgba(139,111,71,.1)',
-              borderRadius: 999,
-              padding: '3px 10px',
-            }}
-          >
+          <span style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--accent)',
+            background: 'rgba(139,111,71,.1)',
+            borderRadius: 999,
+            padding: '3px 10px',
+          }}>
             AI Enhanced
           </span>
         )}
