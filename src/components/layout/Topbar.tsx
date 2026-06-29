@@ -9,6 +9,7 @@ const VIEW_TITLES: Record<View, string> = {
   home: 'Daily Briefing',
   wardrobe: 'Wardrobe',
   inspiration: 'AI Inspiration',
+  shopping: 'Shopping Advisor',
   packing: 'Packing',
   occasions: 'Occasions',
   stylist: 'Stylist Concierge',

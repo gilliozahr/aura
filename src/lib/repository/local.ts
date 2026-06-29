@@ -5,6 +5,8 @@ import type {
   OccasionEvent,
   Order,
   SavedOutfit,
+  ShoppingProduct,
+  ShoppingRecommendation,
   StyleDNAProfile,
   StylistBooking,
   TripPlan,
@@ -141,6 +143,31 @@ export class LocalRepository implements IRepository {
   async deleteOccasionEvent(id: string): Promise<void> {
     const s = this.read();
     this.write({ ...s, occasionEvents: (s.occasionEvents ?? []).filter(e => e.id !== id) });
+  }
+
+  async getShoppingProducts(): Promise<ShoppingProduct[]> {
+    return this.read().shoppingProducts ?? [];
+  }
+
+  async saveShoppingProduct(product: ShoppingProduct): Promise<void> {
+    const s = this.read();
+    const existing = s.shoppingProducts ?? [];
+    this.write({ ...s, shoppingProducts: [product, ...existing.filter(p => p.id !== product.id)] });
+  }
+
+  async deleteShoppingProduct(id: string): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, shoppingProducts: (s.shoppingProducts ?? []).filter(p => p.id !== id) });
+  }
+
+  async getShoppingRecommendations(): Promise<ShoppingRecommendation[]> {
+    return this.read().shoppingRecommendations ?? [];
+  }
+
+  async saveShoppingRecommendation(rec: ShoppingRecommendation): Promise<void> {
+    const s = this.read();
+    const existing = s.shoppingRecommendations ?? [];
+    this.write({ ...s, shoppingRecommendations: [rec, ...existing.filter(r => r.id !== rec.id)] });
   }
 
   async reset(): Promise<void> {

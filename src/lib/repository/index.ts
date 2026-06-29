@@ -5,6 +5,8 @@ import type {
   OccasionEvent,
   Order,
   SavedOutfit,
+  ShoppingProduct,
+  ShoppingRecommendation,
   StyleDNAProfile,
   StylistBooking,
   TripPlan,
@@ -34,6 +36,11 @@ export interface IRepository {
   saveOccasionEvent(event: OccasionEvent): Promise<void>;
   updateOccasionEvent(id: string, updates: Partial<OccasionEvent>): Promise<void>;
   deleteOccasionEvent(id: string): Promise<void>;
+  getShoppingProducts(): Promise<ShoppingProduct[]>;
+  saveShoppingProduct(product: ShoppingProduct): Promise<void>;
+  deleteShoppingProduct(id: string): Promise<void>;
+  getShoppingRecommendations(): Promise<ShoppingRecommendation[]>;
+  saveShoppingRecommendation(rec: ShoppingRecommendation): Promise<void>;
   reset(): Promise<void>;
   uploadImage(
     file: File,

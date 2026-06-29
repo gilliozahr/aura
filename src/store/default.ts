@@ -199,5 +199,7 @@ export function defaultState(): AppState {
     feedback: [],
     tripPlans: [],
     occasionEvents: [],
+    shoppingProducts: [],
+    shoppingRecommendations: [],
   };
 }

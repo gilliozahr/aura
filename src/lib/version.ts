@@ -1,10 +1,10 @@
-export const AURA_VERSION = 'v1.1.0 Preview';
+export const AURA_VERSION = 'v1.2.0 Preview';
 
 export const AURA_RELEASE_NOTES = [
-  'Landing page polish — clear product narrative',
-  'Investor demo journey on Daily Briefing',
-  'Onboarding checklist with progress bar',
-  'App copy refinement across all views',
-  'README and investor demo script',
-  'Mobile and accessibility polish',
+  'Shopping Advisor — paste any product URL for a buy/skip recommendation',
+  'Wardrobe compatibility, Style DNA, and size fit scoring',
+  'Manual product entry when automatic extraction is unavailable',
+  'Size profile in Settings — improves fit confidence',
+  'Shopping history with one-click recall',
+  'Optional OpenAI enhancement for personalised reasoning',
 ];

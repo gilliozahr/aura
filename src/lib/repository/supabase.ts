@@ -10,11 +10,14 @@ import type {
   Order,
   OutfitReport,
   SavedOutfit,
+  ShoppingProduct,
+  ShoppingRecommendation,
   StyleDNAProfile,
   StylistBooking,
   TripPlan,
   TravelWeather,
   UserProfile,
+  UserSizeProfile,
   WardrobeItem,
 } from '@/lib/types';
 import { defaultState } from '@/store/default';
@@ -203,17 +206,25 @@ export class SupabaseRepository implements IRepository {
       }
     }
 
-    const user: UserProfile = profileRow
+    const profileRowFull = profileRow as (UserProfileRow & { size_profile?: unknown }) | null;
+    const rawSizeProfile = profileRowFull?.size_profile;
+    const sizeProfile: UserSizeProfile | undefined =
+      rawSizeProfile && typeof rawSizeProfile === 'object' && Object.keys(rawSizeProfile).length > 0
+        ? (rawSizeProfile as UserSizeProfile)
+        : undefined;
+
+    const user: UserProfile = profileRowFull
       ? {
-          name: profileRow.name,
-          city: profileRow.city,
-          country: profileRow.country ?? undefined,
-          latitude: profileRow.latitude ?? undefined,
-          longitude: profileRow.longitude ?? undefined,
-          temperature: profileRow.temperature,
-          occasion: profileRow.occasion,
-          styleGoal: profileRow.style_goal,
-          budget: profileRow.budget,
+          name: profileRowFull.name,
+          city: profileRowFull.city,
+          country: profileRowFull.country ?? undefined,
+          latitude: profileRowFull.latitude ?? undefined,
+          longitude: profileRowFull.longitude ?? undefined,
+          temperature: profileRowFull.temperature,
+          occasion: profileRowFull.occasion,
+          styleGoal: profileRowFull.style_goal,
+          budget: profileRowFull.budget,
+          sizeProfile,
         }
       : def.user;
 
@@ -346,7 +357,7 @@ export class SupabaseRepository implements IRepository {
 
     const occasionEvents: OccasionEvent[] = ((occasionEventsRes.data ?? []) as unknown as OccasionEventRow[]).map(rowToOccasionEvent);
 
-    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans, occasionEvents };
+    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans, occasionEvents, shoppingProducts: [], shoppingRecommendations: [] };
   }
 
   private assertNoError(error: { message: string } | null, ctx: string): void {
@@ -370,6 +381,7 @@ export class SupabaseRepository implements IRepository {
       occasion: user.occasion,
       style_goal: user.styleGoal,
       budget: user.budget,
+      size_profile: user.sizeProfile ?? {},
     });
     this.assertNoError(error, 'saveUser');
   }
@@ -724,6 +736,133 @@ export class SupabaseRepository implements IRepository {
     this.assertNoError(error, 'deleteOccasionEvent');
   }
 
+  async getShoppingProducts(): Promise<ShoppingProduct[]> {
+    const uid = await this.userId();
+    if (!uid) return [];
+    const { data } = await this.client
+      .from('shopping_products')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (!data) return [];
+    return (data as Record<string, unknown>[]).map(r => ({
+      id: r.id as string,
+      url: r.url as string,
+      title: (r.title as string | null) ?? undefined,
+      brand: (r.brand as string | null) ?? undefined,
+      price: (r.price as number | null) ?? undefined,
+      currency: (r.currency as string | null) ?? undefined,
+      category: (r.category as string | null) ?? undefined,
+      color: (r.color as string | null) ?? undefined,
+      material: (r.material as string | null) ?? undefined,
+      description: (r.description as string | null) ?? undefined,
+      imageUrls: (r.image_urls as string[]) ?? [],
+      availableSizes: (r.available_sizes as string[]) ?? [],
+      sizeGuide: (r.size_guide as Record<string, unknown>) ?? {},
+      extractedAt: (r.extracted_at as string | null) ?? undefined,
+      extractionSource: (r.extraction_source as ShoppingProduct['extractionSource']) ?? undefined,
+      extractionStatus: (r.extraction_status as ShoppingProduct['extractionStatus']) ?? undefined,
+      createdAt: r.created_at as string,
+    }));
+  }
+
+  async saveShoppingProduct(product: ShoppingProduct): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client.from('shopping_products').upsert({
+      id: product.id,
+      user_id: uid,
+      url: product.url,
+      title: product.title ?? null,
+      brand: product.brand ?? null,
+      price: product.price ?? null,
+      currency: product.currency ?? null,
+      category: product.category ?? null,
+      color: product.color ?? null,
+      material: product.material ?? null,
+      description: product.description ?? null,
+      image_urls: product.imageUrls,
+      available_sizes: product.availableSizes,
+      size_guide: product.sizeGuide,
+      extracted_at: product.extractedAt ?? null,
+      extraction_source: product.extractionSource ?? null,
+      extraction_status: product.extractionStatus ?? null,
+      created_at: product.createdAt,
+    });
+    this.assertNoError(error, 'saveShoppingProduct');
+  }
+
+  async deleteShoppingProduct(id: string): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client
+      .from('shopping_products')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', uid);
+    this.assertNoError(error, 'deleteShoppingProduct');
+  }
+
+  async getShoppingRecommendations(): Promise<ShoppingRecommendation[]> {
+    const uid = await this.userId();
+    if (!uid) return [];
+    const { data } = await this.client
+      .from('shopping_recommendations')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (!data) return [];
+    return (data as Record<string, unknown>[]).map(r => ({
+      id: r.id as string,
+      productId: r.product_id as string,
+      decision: r.decision as ShoppingRecommendation['decision'],
+      confidenceScore: r.confidence_score as number,
+      wardrobeMatchScore: r.wardrobe_match_score as number,
+      styleDNAFitScore: r.style_dna_fit_score as number,
+      sizeFitScore: r.size_fit_score as number,
+      duplicateRiskScore: r.duplicate_risk_score as number,
+      occasionUsefulnessScore: r.occasion_usefulness_score as number,
+      tripUsefulnessScore: r.trip_usefulness_score as number,
+      reasoning: r.reasoning as string,
+      risks: (r.risks as string[]) ?? [],
+      sizeNotes: (r.size_notes as string | null) ?? undefined,
+      wardrobeMatches: (r.wardrobe_matches as string[]) ?? [],
+      outfitIdeas: (r.outfit_ideas as string[]) ?? [],
+      missingGapMatch: (r.missing_gap_match as ShoppingRecommendation['missingGapMatch']) ?? {},
+      alternatives: (r.alternatives as string[]) ?? [],
+      aiEnhanced: (r.ai_enhanced as boolean) ?? false,
+      createdAt: r.created_at as string,
+    }));
+  }
+
+  async saveShoppingRecommendation(rec: ShoppingRecommendation): Promise<void> {
+    const uid = await this.userId();
+    if (!uid) return;
+    const { error } = await this.client.from('shopping_recommendations').upsert({
+      id: rec.id,
+      user_id: uid,
+      product_id: rec.productId,
+      decision: rec.decision,
+      confidence_score: rec.confidenceScore,
+      wardrobe_match_score: rec.wardrobeMatchScore,
+      style_dna_fit_score: rec.styleDNAFitScore,
+      size_fit_score: rec.sizeFitScore,
+      duplicate_risk_score: rec.duplicateRiskScore,
+      occasion_usefulness_score: rec.occasionUsefulnessScore,
+      trip_usefulness_score: rec.tripUsefulnessScore,
+      reasoning: rec.reasoning,
+      risks: rec.risks,
+      size_notes: rec.sizeNotes ?? null,
+      wardrobe_matches: rec.wardrobeMatches,
+      outfit_ideas: rec.outfitIdeas,
+      missing_gap_match: rec.missingGapMatch,
+      alternatives: rec.alternatives,
+      ai_enhanced: rec.aiEnhanced ?? false,
+      created_at: rec.createdAt,
+    });
+    this.assertNoError(error, 'saveShoppingRecommendation');
+  }
+
   async reset(): Promise<void> {
     const uid = await this.userId();
     if (!uid) return;
@@ -737,6 +876,8 @@ export class SupabaseRepository implements IRepository {
       this.client.from('style_dna_profiles').delete().eq('user_id', uid),
       this.client.from('trip_plans').delete().eq('user_id', uid),
       this.client.from('occasion_events').delete().eq('user_id', uid),
+      this.client.from('shopping_products').delete().eq('user_id', uid),
+      this.client.from('shopping_recommendations').delete().eq('user_id', uid),
     ]);
   }
 
