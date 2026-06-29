@@ -33,9 +33,17 @@ async function getSupabase() {
 }
 
 export async function POST(req: Request) {
-  const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const supabase = await getSupabase().catch(() => null);
+  if (!supabase) return NextResponse.json({ error: 'Server error' }, { status: 500 });
+
+  let userId: string;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    userId = user.id;
+  } catch {
+    return NextResponse.json({ error: 'Auth check failed' }, { status: 500 });
+  }
 
   let body: { product?: ShoppingProduct };
   try {
@@ -45,23 +53,41 @@ export async function POST(req: Request) {
   }
 
   const product = body.product;
-  if (!product || !product.id || !product.url) {
-    return NextResponse.json({ error: 'product with id and url is required' }, { status: 400 });
+  if (!product || !product.id) {
+    return NextResponse.json({ error: 'product with id is required' }, { status: 400 });
   }
 
-  const uid = user.id;
+  const isManual = product.extractionSource === 'manual' || !product.url;
+  console.log(`[shopping/analyze] start product=${product.id} manual=${isManual} title="${product.title ?? ''}"`);
 
   // Load user context in parallel
-  const [wardrobeRes, profileRes, dnaRes, tripsRes, occasionsRes, outfitsRes] = await Promise.all([
-    supabase.from('wardrobe_items').select('*').eq('user_id', uid),
-    supabase.from('user_profiles').select('*').eq('id', uid).single(),
-    supabase.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
-    supabase.from('trip_plans').select('*').eq('user_id', uid),
-    supabase.from('occasion_events').select('*').eq('user_id', uid),
-    supabase.from('saved_outfits').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(10),
-  ]);
+  let wardrobeData: Record<string, unknown>[] = [];
+  let profileRow: Record<string, unknown> | null = null;
+  let dnaRow: Record<string, unknown> | null = null;
+  let tripsData: Record<string, unknown>[] = [];
+  let occasionsData: Record<string, unknown>[] = [];
+  let outfitsData: Record<string, unknown>[] = [];
 
-  const wardrobe: WardrobeItem[] = ((wardrobeRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+  try {
+    const [wardrobeRes, profileRes, dnaRes, tripsRes, occasionsRes, outfitsRes] = await Promise.all([
+      supabase.from('wardrobe_items').select('*').eq('user_id', userId),
+      supabase.from('user_profiles').select('*').eq('id', userId).single(),
+      supabase.from('style_dna_profiles').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('trip_plans').select('*').eq('user_id', userId),
+      supabase.from('occasion_events').select('*').eq('user_id', userId),
+      supabase.from('saved_outfits').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
+    ]);
+    wardrobeData = (wardrobeRes.data ?? []) as Record<string, unknown>[];
+    profileRow = profileRes.data as Record<string, unknown> | null;
+    dnaRow = dnaRes.data as Record<string, unknown> | null;
+    tripsData = (tripsRes.data ?? []) as Record<string, unknown>[];
+    occasionsData = (occasionsRes.data ?? []) as Record<string, unknown>[];
+    outfitsData = (outfitsRes.data ?? []) as Record<string, unknown>[];
+  } catch {
+    return NextResponse.json({ error: 'Failed to load user context' }, { status: 500 });
+  }
+
+  const wardrobe: WardrobeItem[] = wardrobeData.map(r => ({
     id: r.id as string,
     name: r.name as string,
     category: r.category as string,
@@ -74,13 +100,11 @@ export async function POST(req: Request) {
     image: r.image_url as string,
   }));
 
-  const profileRow = profileRes.data as Record<string, unknown> | null;
   const sizeProfile: UserSizeProfile | undefined =
     profileRow?.size_profile && typeof profileRow.size_profile === 'object' && Object.keys(profileRow.size_profile as object).length > 0
       ? (profileRow.size_profile as UserSizeProfile)
       : undefined;
 
-  const dnaRow = dnaRes.data as Record<string, unknown> | null;
   const styleDNA: StyleDNAProfile | undefined = dnaRow
     ? {
         preferredColors: (dnaRow.preferred_colors as StyleDNAProfile['preferredColors']) ?? [],
@@ -98,7 +122,7 @@ export async function POST(req: Request) {
       }
     : undefined;
 
-  const tripPlans: TripPlan[] = ((tripsRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+  const tripPlans: TripPlan[] = tripsData.map(r => ({
     id: r.id as string,
     destinationCity: r.destination_city as string,
     destinationCountry: (r.destination_country as string | null) ?? undefined,
@@ -116,7 +140,7 @@ export async function POST(req: Request) {
     createdAt: r.created_at as string,
   }));
 
-  const occasionEvents: OccasionEvent[] = ((occasionsRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+  const occasionEvents: OccasionEvent[] = occasionsData.map(r => ({
     id: r.id as string,
     title: r.title as string,
     eventType: r.event_type as OccasionEvent['eventType'],
@@ -127,7 +151,7 @@ export async function POST(req: Request) {
     updatedAt: r.updated_at as string,
   }));
 
-  const savedOutfits: SavedOutfit[] = ((outfitsRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+  const savedOutfits: SavedOutfit[] = outfitsData.map(r => ({
     id: r.id as string,
     outfitItems: (r.outfit_items as WardrobeItem[]) ?? [],
     report: r.report as SavedOutfit['report'],
@@ -136,6 +160,7 @@ export async function POST(req: Request) {
   }));
 
   // Deterministic analysis
+  console.log(`[shopping/analyze] deterministic wardrobe=${wardrobe.length} dna=${!!styleDNA} size=${!!sizeProfile}`);
   const recommendation: ShoppingRecommendation = analyzeShoppingProduct({
     product,
     wardrobe,
@@ -193,5 +218,6 @@ export async function POST(req: Request) {
     }
   }
 
+  console.log(`[shopping/analyze] success decision=${recommendation.decision} confidence=${recommendation.confidenceScore}`);
   return NextResponse.json({ recommendation });
 }

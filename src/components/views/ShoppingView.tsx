@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAura } from '@/store';
-import { useToast } from '@/store/toast';
 import { uid } from '@/lib/utils';
 import type {
   ShoppingProduct,
@@ -708,9 +707,10 @@ interface ManualFormProps {
   url: string;
   onSubmit: (product: ShoppingProduct) => void;
   onCancel: () => void;
+  isSubmitting?: boolean;
 }
 
-function ManualProductForm({ url, onSubmit, onCancel }: ManualFormProps) {
+function ManualProductForm({ url, onSubmit, onCancel, isSubmitting = false }: ManualFormProps) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -781,8 +781,10 @@ function ManualProductForm({ url, onSubmit, onCancel }: ManualFormProps) {
         </label>
         <label>Notes / description <textarea name="notes" placeholder="Any additional details…" style={{ minHeight: 60 }} /></label>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button type="submit" className="primary" style={{ flex: 1 }}>Analyse Product</button>
-          <button type="button" className="ghost" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="primary" style={{ flex: 1 }} disabled={isSubmitting}>
+            {isSubmitting ? 'Generating recommendation…' : 'Analyse Product'}
+          </button>
+          <button type="button" className="ghost" onClick={onCancel} disabled={isSubmitting}>Cancel</button>
         </div>
       </form>
     </div>
@@ -872,7 +874,6 @@ type Phase = 'idle' | 'extracting' | 'choice' | 'manual' | 'analysing' | 'site_l
 
 export default function ShoppingView() {
   const { state, dispatch } = useAura();
-  const { toast } = useToast();
 
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState('');
@@ -882,6 +883,7 @@ export default function ShoppingView() {
   const [currentRec, setCurrentRec] = useState<ShoppingRecommendation | null>(null);
   const [siteRec, setSiteRec] = useState<ShoppingSiteRecommendation | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const products = state.shoppingProducts ?? [];
   const recs = state.shoppingRecommendations ?? [];
@@ -971,6 +973,7 @@ export default function ShoppingView() {
   async function runAnalysis(product: ShoppingProduct) {
     setPhase('analysing');
     setCurrentProduct(product);
+    setAnalysisError(null);
 
     try {
       const res = await fetch('/api/shopping/analyze', {
@@ -978,20 +981,24 @@ export default function ShoppingView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product }),
       });
-      const data = await res.json() as { recommendation?: ShoppingRecommendation; error?: string };
+      const data = await safeReadJson(res) as { recommendation?: ShoppingRecommendation; error?: string } | null;
 
-      if (!res.ok) throw new Error(data.error ?? 'Analysis failed');
+      if (!res.ok || !data) {
+        throw new Error((data?.error as string | undefined) ?? 'Analysis failed');
+      }
       if (!data.recommendation) throw new Error('No recommendation returned');
 
       const rec = data.recommendation;
       setCurrentRec(rec);
+      setAnalysisError(null);
       setPhase('done');
 
       dispatch({ type: 'ADD_SHOPPING_PRODUCT', payload: product });
       dispatch({ type: 'ADD_SHOPPING_RECOMMENDATION', payload: rec });
     } catch (err) {
-      toast(`Error: ${normalizeError(err, 'Analysis failed.')}`);
-      setPhase('idle');
+      const msg = normalizeError(err, 'AURA could not generate a recommendation for this item. Please check the product details and try again.');
+      setAnalysisError(msg);
+      setPhase('manual');
     }
   }
 
@@ -1039,6 +1046,9 @@ export default function ShoppingView() {
   }
 
   function handleManualSubmit(product: ShoppingProduct) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[shopping/manual] submit', { title: product.title, category: product.category, hasImage: product.imageUrls.length > 0 });
+    }
     void runAnalysis(product);
   }
 
@@ -1147,12 +1157,20 @@ export default function ShoppingView() {
       )}
 
       {/* ── Manual Form ── */}
-      {phase === 'manual' && (
-        <ManualProductForm
-          url={urlInput}
-          onSubmit={handleManualSubmit}
-          onCancel={() => setPhase(urlInput ? 'choice' : 'idle')}
-        />
+      {(phase === 'manual' || (phase === 'analysing' && currentProduct?.extractionSource === 'manual')) && (
+        <>
+          {analysisError && (
+            <div className="card" style={{ marginBottom: 12, padding: '12px 16px', background: 'rgba(156,47,47,.08)', borderLeft: '3px solid var(--bad)', color: 'var(--text)', fontSize: 14 }}>
+              {analysisError}
+            </div>
+          )}
+          <ManualProductForm
+            url={urlInput}
+            onSubmit={handleManualSubmit}
+            onCancel={() => { setAnalysisError(null); setPhase(urlInput ? 'choice' : 'idle'); }}
+            isSubmitting={phase === 'analysing'}
+          />
+        </>
       )}
 
       {/* ── Product Card (during analysis or done) ── */}
