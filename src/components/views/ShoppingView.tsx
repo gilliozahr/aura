@@ -49,6 +49,14 @@ function normalizeError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+async function safeReadJson(res: Response): Promise<Record<string, unknown> | null> {
+  try {
+    return await res.json() as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function isProductSufficient(product: ShoppingProduct): boolean {
   const hasTitle = !!(product.title && product.title.length > 3);
   const hasContent = !!(
@@ -889,25 +897,31 @@ export default function ShoppingView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: normalised }),
       });
-      const data = await res.json() as {
+      const data = await safeReadJson(res) as {
         product?: ShoppingProduct;
         extractionStatus?: string;
         warnings?: string[];
         error?: string;
-      };
+      } | null;
 
       // Server-side homepage detection or blocked page → choice card
-      if (res.status === 422 || data.extractionStatus === 'manual_required') {
-        if (data.warnings?.length) setWarnings(data.warnings);
+      if (res.status === 422 || data?.extractionStatus === 'manual_required') {
+        if (data?.warnings?.length) setWarnings(data.warnings);
         setChoiceContext(res.status === 422 ? 'homepage' : 'product_failed');
         setPhase('choice');
         return;
       }
-      if (!res.ok) throw new Error(data.error ?? 'Extraction failed');
+      if (!res.ok || !data) {
+        setChoiceContext('product_failed');
+        setWarnings(['AURA could not read this product automatically. The website may be blocking product metadata. Choose how to continue.']);
+        setPhase('choice');
+        return;
+      }
+      if (data.error) throw new Error(data.error);
       const product = data.product;
       if (!product) throw new Error('No product returned');
 
-      setWarnings(data.warnings ?? []);
+      setWarnings(data?.warnings ?? []);
 
       if (!isProductSufficient(product)) {
         setCurrentProduct(product);
@@ -954,19 +968,30 @@ export default function ShoppingView() {
   async function handleChoiceSiteRec() {
     setPhase('site_loading');
     setSiteRec(null);
+    setWarnings([]);
     try {
       const res = await fetch('/api/shopping/site-recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: urlInput.trim() }),
       });
-      const data = await res.json() as { recommendation?: ShoppingSiteRecommendation; error?: string };
-      if (!res.ok) throw new Error(data.error ?? 'Recommendation failed');
-      if (!data.recommendation) throw new Error('No recommendation returned');
+      const data = await safeReadJson(res) as { recommendation?: ShoppingSiteRecommendation; error?: string } | null;
+      if (!res.ok || !data) {
+        const msg = data?.error ?? 'Website recommendations could not be generated. Please try again or enter product details manually.';
+        setWarnings([String(msg)]);
+        setPhase('choice');
+        return;
+      }
+      if (!data.recommendation) {
+        setWarnings(['Website recommendations could not be generated. Please try again or enter product details manually.']);
+        setPhase('choice');
+        return;
+      }
       setSiteRec(data.recommendation);
       setPhase('site_done');
     } catch (err) {
-      toast(`Error: ${normalizeError(err, 'Recommendation failed.')}`);
+      const msg = normalizeError(err, 'Website recommendations could not be generated. Please try again or enter product details manually.');
+      setWarnings([msg]);
       setPhase('choice');
     }
   }
@@ -1018,6 +1043,15 @@ export default function ShoppingView() {
   }
 
   const isLoading = phase === 'extracting' || phase === 'analysing' || phase === 'site_loading';
+
+  // Dev-only state tracing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[shopping/ui]', {
+      phase,
+      domain: urlInput ? (() => { try { return new URL(urlInput.startsWith('http') ? urlInput : `https://${urlInput}`).hostname; } catch { return urlInput; } })() : '',
+      warningCount: warnings.length,
+    });
+  }
 
   return (
     <div className="view-content">

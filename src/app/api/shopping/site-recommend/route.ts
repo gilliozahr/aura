@@ -12,8 +12,9 @@ import type {
 
 export const runtime = 'nodejs';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function safeParseAiJson(content: string): Record<string, unknown> | null {
-  // Strip markdown code fences that some models include despite json_object mode
   const stripped = content
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/i, '')
@@ -21,7 +22,6 @@ function safeParseAiJson(content: string): Record<string, unknown> | null {
   try {
     return JSON.parse(stripped) as Record<string, unknown>;
   } catch {
-    // Fallback: extract the first {...} block from mixed-content responses
     const match = stripped.match(/\{[\s\S]*\}/);
     if (match) {
       try { return JSON.parse(match[0]) as Record<string, unknown>; } catch { /* give up */ }
@@ -30,27 +30,18 @@ function safeParseAiJson(content: string): Record<string, unknown> | null {
   }
 }
 
-async function getSupabase() {
-  const cookieStore = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll(toSet) {
-          try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
-          catch { /* read-only in Server Component */ }
-        },
-      },
-    }
-  );
+function normalizeServerError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return 'unknown error';
 }
 
 function capitaliseDomain(domain: string): string {
   const name = domain.replace(/^www\./, '').split('.')[0];
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
+
+// ── Deterministic recommendation ──────────────────────────────────────────────
 
 function buildDeterministicRec(
   domain: string,
@@ -66,33 +57,32 @@ function buildDeterministicRec(
   const gaps = styleDNA?.wardrobeGaps ?? [];
   const focusCategories: string[] = [...gaps.slice(0, 3)];
   if (focusCategories.length === 0) {
-    const categoryCounts: Record<string, number> = {};
+    const catCounts: Record<string, number> = {};
     for (const item of wardrobe) {
-      categoryCounts[item.category] = (categoryCounts[item.category] ?? 0) + 1;
+      catCounts[item.category] = (catCounts[item.category] ?? 0) + 1;
     }
-    const allCats = ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Accessory'];
-    for (const cat of allCats) {
-      if (!categoryCounts[cat] || categoryCounts[cat] < 2) focusCategories.push(cat);
+    for (const cat of ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Accessory']) {
+      if (!catCounts[cat] || catCounts[cat] < 2) focusCategories.push(cat);
       if (focusCategories.length >= 3) break;
     }
   }
 
   // Avoid: over-represented categories
-  const categoryCounts: Record<string, { count: number; colors: string[] }> = {};
+  const catData: Record<string, { count: number; colors: string[] }> = {};
   for (const item of wardrobe) {
-    if (!categoryCounts[item.category]) categoryCounts[item.category] = { count: 0, colors: [] };
-    categoryCounts[item.category].count++;
-    if (item.color) categoryCounts[item.category].colors.push(item.color.toLowerCase());
+    if (!catData[item.category]) catData[item.category] = { count: 0, colors: [] };
+    catData[item.category].count++;
+    if (item.color) catData[item.category].colors.push(item.color.toLowerCase());
   }
   const avoidCategories: string[] = [];
-  for (const [cat, { count, colors }] of Object.entries(categoryCounts)) {
+  for (const [cat, { count, colors }] of Object.entries(catData)) {
     if (count >= 4) {
-      const dominantColor = colors.length > 0
+      const dominant = colors.length > 0
         ? colors.sort((a, b) => colors.filter(c => c === b).length - colors.filter(c => c === a).length)[0]
         : null;
       avoidCategories.push(
-        dominantColor
-          ? `more ${dominantColor} ${cat.toLowerCase()}s (already have ${count})`
+        dominant
+          ? `more ${dominant} ${cat.toLowerCase()}s (already have ${count})`
           : `more ${cat.toLowerCase()}s (already have ${count})`
       );
     }
@@ -110,21 +100,20 @@ function buildDeterministicRec(
     'Complete your Style DNA in Settings for personalised colour and style guidance.';
 
   // Size notes
-  let sizeNotes = '';
+  let sizeNotes: string;
   if (sizeProfile) {
-    const unit = sizeProfile.measurementUnit ?? 'cm';
     const parts: string[] = [];
     if (sizeProfile.topSize) parts.push(`top ${sizeProfile.topSize}`);
     if (sizeProfile.bottomSize) parts.push(`bottom ${sizeProfile.bottomSize}`);
     if (sizeProfile.shoeSizeEU) parts.push(`EU shoe ${sizeProfile.shoeSizeEU}`);
     sizeNotes = parts.length > 0
-      ? `Your sizes: ${parts.join(', ')} (${unit}). Confirm with the brand's size guide before ordering.`
+      ? `Your sizes: ${parts.join(', ')}. Confirm with the brand's size guide before ordering.`
       : 'Add your sizes in Settings for fit guidance.';
   } else {
     sizeNotes = 'Add your size profile in Settings for personalised fit guidance.';
   }
 
-  // Occasion notes
+  // Occasion / trip notes
   const today = new Date();
   const soon = new Date(today.getTime() + 30 * 86_400_000);
   const occasionNotes: string[] = [];
@@ -156,7 +145,6 @@ function buildDeterministicRec(
       ? `Confidence is based on ${styleDNA.signalCount} style signals.`
       : 'Build your Style DNA by rating outfits for better guidance.');
 
-  // Confidence
   const confidenceScore = Math.min(
     50 +
     (styleDNA ? Math.min(Math.round(styleDNA.confidenceScore / 2), 30) : 0) +
@@ -181,27 +169,53 @@ function buildDeterministicRec(
   };
 }
 
+// ── Route ─────────────────────────────────────────────────────────────────────
+
 export async function POST(req: Request) {
-  const supabase = await getSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  let body: { url?: string };
-  try { body = await req.json() as { url?: string }; }
-  catch { return NextResponse.json({ error: 'Invalid request body' }, { status: 400 }); }
-
-  const rawUrl = (body.url ?? '').trim();
-  if (!rawUrl) return NextResponse.json({ error: 'url is required' }, { status: 400 });
-
-  let domain: string;
+  // Parse domain first — needed for any fallback response
+  let domain = '';
+  let rawUrl = '';
   try {
-    domain = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`).hostname;
+    const body = await req.json() as { url?: string };
+    rawUrl = (body.url ?? '').trim();
+    if (rawUrl) {
+      domain = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`).hostname;
+    }
   } catch {
-    return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const uid = user.id;
+  if (!rawUrl) return NextResponse.json({ error: 'url is required' }, { status: 400 });
+  if (!domain) return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
 
+  console.log('[shopping/site-recommend] start', { domain });
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  let userId: string | null = null;
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(toSet) {
+            try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
+            catch { /* read-only in Server Component */ }
+          },
+        },
+      }
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    userId = user.id;
+  } catch (err) {
+    console.warn('[shopping/site-recommend] auth error', normalizeServerError(err));
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // ── Load context ──────────────────────────────────────────────────────────
   let wardrobe: WardrobeItem[] = [];
   let sizeProfile: UserSizeProfile | undefined;
   let styleDNA: StyleDNAProfile | undefined;
@@ -209,6 +223,20 @@ export async function POST(req: Request) {
   let occasions: OccasionEvent[] = [];
 
   try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(toSet) {
+            try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); }
+            catch { /* read-only */ }
+          },
+        },
+      }
+    );
     const [
       { data: wardrobeRows },
       { data: profile },
@@ -216,25 +244,59 @@ export async function POST(req: Request) {
       { data: tripRows },
       { data: occasionRows },
     ] = await Promise.all([
-      supabase.from('wardrobe_items').select('*').eq('user_id', uid),
-      supabase.from('user_profiles').select('size_profile').eq('id', uid).single(),
-      supabase.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
-      supabase.from('trip_plans').select('*').eq('user_id', uid),
-      supabase.from('occasion_events').select('*').eq('user_id', uid),
+      supabase.from('wardrobe_items').select('*').eq('user_id', userId),
+      supabase.from('user_profiles').select('size_profile').eq('id', userId).single(),
+      supabase.from('style_dna_profiles').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('trip_plans').select('*').eq('user_id', userId),
+      supabase.from('occasion_events').select('*').eq('user_id', userId),
     ]);
     wardrobe = (wardrobeRows ?? []) as WardrobeItem[];
     sizeProfile = (profile?.size_profile ?? undefined) as UserSizeProfile | undefined;
     styleDNA = (styleDNARow ?? undefined) as StyleDNAProfile | undefined;
     tripPlans = (tripRows ?? []) as TripPlan[];
     occasions = (occasionRows ?? []) as OccasionEvent[];
-  } catch {
-    // Context load failed — build deterministic rec with empty context rather than 500
-    console.log('[shopping/site-recommend] context load failed, using empty context');
+  } catch (err) {
+    console.warn('[shopping/site-recommend] context load failed, using empty context', normalizeServerError(err));
   }
 
-  const rec = buildDeterministicRec(domain, wardrobe, styleDNA, sizeProfile, tripPlans, occasions);
+  console.log('[shopping/site-recommend] data loaded', {
+    wardrobeCount: wardrobe.length,
+    hasStyleDNA: !!styleDNA,
+    hasSizeProfile: !!sizeProfile,
+    tripsCount: tripPlans.length,
+    occasionsCount: occasions.length,
+  });
 
-  // Optional AI enhancement — compact prompt, no personal measurements
+  // ── Build deterministic recommendation (always succeeds) ──────────────────
+  let rec: ShoppingSiteRecommendation;
+  try {
+    rec = buildDeterministicRec(domain, wardrobe, styleDNA, sizeProfile, tripPlans, occasions);
+  } catch (err) {
+    console.warn('[shopping/site-recommend] deterministic build failed', normalizeServerError(err));
+    // Last-resort minimal rec so we never return 500
+    rec = {
+      domain,
+      brandName: capitaliseDomain(domain),
+      focusCategories: ['Top', 'Bottom', 'Shoes'],
+      avoidCategories: [],
+      reasoning: `Browse ${capitaliseDomain(domain)} for wardrobe essentials. Add your Style DNA in Settings for personalised guidance.`,
+      styleNotes: 'Complete your Style DNA in Settings for personalised colour and style guidance.',
+      sizeNotes: 'Add your size profile in Settings for personalised fit guidance.',
+      confidenceScore: 50,
+      wardrobeGapMatches: [],
+      occasionNotes: [],
+      aiEnhanced: false,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  console.log('[shopping/site-recommend] deterministic ready', {
+    confidenceScore: rec.confidenceScore,
+    focusCount: rec.focusCategories.length,
+    avoidCount: rec.avoidCategories.length,
+  });
+
+  // ── Optional AI enhancement ────────────────────────────────────────────────
   if (process.env.OPENAI_API_KEY) {
     try {
       const gaps = rec.wardrobeGapMatches.join(', ') || 'none identified';
@@ -256,7 +318,10 @@ Reply with JSON only: {"reasoning":"...","focusCategories":["..."],"avoidCategor
 
       const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
@@ -272,26 +337,32 @@ Reply with JSON only: {"reasoning":"...","focusCategories":["..."],"avoidCategor
           const aiData = await aiRes.json() as { choices?: { message?: { content?: string } }[] };
           content = aiData.choices?.[0]?.message?.content;
         } catch {
-          content = undefined; // malformed OpenAI response — fall through to deterministic
+          content = undefined;
         }
         if (content) {
           const parsed = safeParseAiJson(content);
           if (parsed) {
             if (typeof parsed.reasoning === 'string' && parsed.reasoning) rec.reasoning = parsed.reasoning;
             if (Array.isArray(parsed.focusCategories) && (parsed.focusCategories as unknown[]).length > 0)
-              rec.focusCategories = (parsed.focusCategories as string[]);
+              rec.focusCategories = parsed.focusCategories as string[];
             if (Array.isArray(parsed.avoidCategories) && (parsed.avoidCategories as unknown[]).length > 0)
-              rec.avoidCategories = (parsed.avoidCategories as string[]);
+              rec.avoidCategories = parsed.avoidCategories as string[];
             if (typeof parsed.styleNotes === 'string' && parsed.styleNotes) rec.styleNotes = parsed.styleNotes;
             rec.aiEnhanced = true;
+          } else {
+            console.warn('[shopping/site-recommend] ai fallback: safeParseAiJson returned null');
           }
-          // safeParseAiJson returning null means malformed — serve deterministic result (aiEnhanced stays false)
         }
+      } else {
+        console.warn('[shopping/site-recommend] ai fallback: OpenAI HTTP', aiRes.status);
       }
-    } catch {
-      // AI failed — serve deterministic result
+    } catch (err) {
+      console.warn('[shopping/site-recommend] ai fallback', normalizeServerError(err));
     }
+  } else {
+    console.log('[shopping/site-recommend] ai skipped: no OPENAI_API_KEY');
   }
 
+  console.log('[shopping/site-recommend] success', { aiEnhanced: rec.aiEnhanced });
   return NextResponse.json({ recommendation: rec });
 }
