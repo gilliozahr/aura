@@ -336,6 +336,8 @@ export async function POST(req: Request) {
     );
   }
 
+  console.log('[shopping/extract] input', { hostname: parsed.hostname, pathname });
+
   // Fetch the page
   let html = '';
   let fetchOk = false;
@@ -379,6 +381,7 @@ export async function POST(req: Request) {
       extractionStatus: status,
       createdAt: new Date().toISOString(),
     };
+    console.log('[shopping/extract] result', { extractionStatus: status, fetchOk, reason: 'fetch_failed_or_empty' });
     return NextResponse.json({
       product,
       extractionStatus: status,
@@ -482,5 +485,6 @@ export async function POST(req: Request) {
     );
   }
 
+  console.log('[shopping/extract] result', { extractionStatus: status, hasTitle: !!title, imageCount: images.length, source });
   return NextResponse.json({ product, extractionStatus: status, missingFields, warnings });
 }

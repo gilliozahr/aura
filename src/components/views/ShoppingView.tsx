@@ -906,8 +906,9 @@ export default function ShoppingView() {
         await runAnalysis(product);
       }
     } catch (err) {
-      toast(`Error: ${normalizeError(err, 'Product details could not be read.')}`);
-      setPhase('idle');
+      // Always show choice card — never silently return to idle
+      setPhase('choice');
+      setWarnings([normalizeError(err, 'Product details could not be read from this link.')]);
     }
   }
 

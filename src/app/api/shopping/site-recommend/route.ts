@@ -12,6 +12,24 @@ import type {
 
 export const runtime = 'nodejs';
 
+function safeParseAiJson(content: string): Record<string, unknown> | null {
+  // Strip markdown code fences that some models include despite json_object mode
+  const stripped = content
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    .trim();
+  try {
+    return JSON.parse(stripped) as Record<string, unknown>;
+  } catch {
+    // Fallback: extract the first {...} block from mixed-content responses
+    const match = stripped.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { return JSON.parse(match[0]) as Record<string, unknown>; } catch { /* give up */ }
+    }
+    return null;
+  }
+}
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -183,25 +201,36 @@ export async function POST(req: Request) {
   }
 
   const uid = user.id;
-  const [
-    { data: wardrobeRows },
-    { data: profile },
-    { data: styleDNARow },
-    { data: tripRows },
-    { data: occasionRows },
-  ] = await Promise.all([
-    supabase.from('wardrobe_items').select('*').eq('user_id', uid),
-    supabase.from('user_profiles').select('size_profile').eq('id', uid).single(),
-    supabase.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
-    supabase.from('trip_plans').select('*').eq('user_id', uid),
-    supabase.from('occasion_events').select('*').eq('user_id', uid),
-  ]);
 
-  const wardrobe = (wardrobeRows ?? []) as WardrobeItem[];
-  const sizeProfile = (profile?.size_profile ?? undefined) as UserSizeProfile | undefined;
-  const styleDNA = styleDNARow as StyleDNAProfile | undefined ?? undefined;
-  const tripPlans = (tripRows ?? []) as TripPlan[];
-  const occasions = (occasionRows ?? []) as OccasionEvent[];
+  let wardrobe: WardrobeItem[] = [];
+  let sizeProfile: UserSizeProfile | undefined;
+  let styleDNA: StyleDNAProfile | undefined;
+  let tripPlans: TripPlan[] = [];
+  let occasions: OccasionEvent[] = [];
+
+  try {
+    const [
+      { data: wardrobeRows },
+      { data: profile },
+      { data: styleDNARow },
+      { data: tripRows },
+      { data: occasionRows },
+    ] = await Promise.all([
+      supabase.from('wardrobe_items').select('*').eq('user_id', uid),
+      supabase.from('user_profiles').select('size_profile').eq('id', uid).single(),
+      supabase.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
+      supabase.from('trip_plans').select('*').eq('user_id', uid),
+      supabase.from('occasion_events').select('*').eq('user_id', uid),
+    ]);
+    wardrobe = (wardrobeRows ?? []) as WardrobeItem[];
+    sizeProfile = (profile?.size_profile ?? undefined) as UserSizeProfile | undefined;
+    styleDNA = (styleDNARow ?? undefined) as StyleDNAProfile | undefined;
+    tripPlans = (tripRows ?? []) as TripPlan[];
+    occasions = (occasionRows ?? []) as OccasionEvent[];
+  } catch {
+    // Context load failed — build deterministic rec with empty context rather than 500
+    console.log('[shopping/site-recommend] context load failed, using empty context');
+  }
 
   const rec = buildDeterministicRec(domain, wardrobe, styleDNA, sizeProfile, tripPlans, occasions);
 
@@ -238,22 +267,25 @@ Reply with JSON only: {"reasoning":"...","focusCategories":["..."],"avoidCategor
       });
 
       if (aiRes.ok) {
-        const aiData = await aiRes.json() as { choices?: { message?: { content?: string } }[] };
-        const content = aiData.choices?.[0]?.message?.content;
+        let content: string | undefined;
+        try {
+          const aiData = await aiRes.json() as { choices?: { message?: { content?: string } }[] };
+          content = aiData.choices?.[0]?.message?.content;
+        } catch {
+          content = undefined; // malformed OpenAI response — fall through to deterministic
+        }
         if (content) {
-          const parsed = JSON.parse(content) as {
-            reasoning?: string;
-            focusCategories?: string[];
-            avoidCategories?: string[];
-            styleNotes?: string;
-          };
-          if (parsed.reasoning) rec.reasoning = parsed.reasoning;
-          if (Array.isArray(parsed.focusCategories) && parsed.focusCategories.length > 0)
-            rec.focusCategories = parsed.focusCategories;
-          if (Array.isArray(parsed.avoidCategories) && parsed.avoidCategories.length > 0)
-            rec.avoidCategories = parsed.avoidCategories;
-          if (parsed.styleNotes) rec.styleNotes = parsed.styleNotes;
-          rec.aiEnhanced = true;
+          const parsed = safeParseAiJson(content);
+          if (parsed) {
+            if (typeof parsed.reasoning === 'string' && parsed.reasoning) rec.reasoning = parsed.reasoning;
+            if (Array.isArray(parsed.focusCategories) && (parsed.focusCategories as unknown[]).length > 0)
+              rec.focusCategories = (parsed.focusCategories as string[]);
+            if (Array.isArray(parsed.avoidCategories) && (parsed.avoidCategories as unknown[]).length > 0)
+              rec.avoidCategories = (parsed.avoidCategories as string[]);
+            if (typeof parsed.styleNotes === 'string' && parsed.styleNotes) rec.styleNotes = parsed.styleNotes;
+            rec.aiEnhanced = true;
+          }
+          // safeParseAiJson returning null means malformed — serve deterministic result (aiEnhanced stays false)
         }
       }
     } catch {
