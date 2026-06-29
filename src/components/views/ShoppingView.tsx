@@ -890,6 +890,7 @@ export default function ShoppingView() {
 
       // Server-side homepage detection or blocked page → choice card
       if (res.status === 422 || data.extractionStatus === 'manual_required') {
+        if (data.warnings?.length) setWarnings(data.warnings);
         setPhase('choice');
         return;
       }
