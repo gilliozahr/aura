@@ -20,7 +20,7 @@ create table if not exists public.occasion_events (
   country_code text,
   formality text not null default 'Smart Casual'
     check (formality in ('Casual', 'Smart Casual', 'Business', 'Cocktail', 'Formal', 'Black Tie')),
-  dress_code text nullable
+  dress_code text
     check (dress_code is null or dress_code in (
       'Smart Casual', 'Business Casual', 'Business Formal', 'Cocktail',
       'Black Tie', 'White Tie', 'Casual', 'Theme'
