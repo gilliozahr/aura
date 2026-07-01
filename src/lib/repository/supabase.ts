@@ -367,6 +367,7 @@ export class SupabaseRepository implements IRepository {
     }));
 
     const occasionEvents: OccasionEvent[] = ((occasionEventsRes.data ?? []) as unknown as OccasionEventRow[]).map(rowToOccasionEvent);
+    console.log('[loadState] uid:', uid, 'occasionEvents loaded:', occasionEvents.length);
 
     return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans, occasionEvents, shoppingProducts: [], shoppingRecommendations: [], outfitPlans: [] };
   }
@@ -674,21 +675,25 @@ export class SupabaseRepository implements IRepository {
 
   async getOccasionEvents(): Promise<OccasionEvent[]> {
     const uid = await this.userId();
+    console.log('[getOccasionEvents] uid:', uid);
     if (!uid) return [];
-    const { data } = await this.client
+    const { data, error } = await this.client
       .from('occasion_events')
       .select('*')
       .eq('user_id', uid)
       .order('event_date', { ascending: true });
+    if (error) console.error('[getOccasionEvents] error:', error.code, error.message, error.details);
+    console.log('[getOccasionEvents] rows returned:', data?.length ?? 0);
     if (!data) return [];
     return (data as unknown as OccasionEventRow[]).map(rowToOccasionEvent);
   }
 
   async saveOccasionEvent(event: OccasionEvent): Promise<void> {
     const uid = await this.userId();
+    console.log('[saveOccasionEvent] uid:', uid, 'eventId:', event.id, 'date:', event.date);
     if (!uid) throw new Error('Not authenticated — occasion not saved');
     const now = new Date().toISOString();
-    const { error } = await this.client.from('occasion_events').upsert({
+    const row = {
       id: event.id,
       user_id: uid,
       title: event.title,
@@ -709,8 +714,15 @@ export class SupabaseRepository implements IRepository {
       recommended_outfit: event.recommendedOutfit ?? null,
       outfit_status: event.outfitStatus,
       updated_at: now,
-    }, { onConflict: 'id' });
-    this.assertNoError(error, 'saveOccasionEvent');
+    };
+    const { error, status, statusText } = await this.client
+      .from('occasion_events')
+      .upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.error('[saveOccasionEvent] FAILED — status:', status, statusText, '| code:', error.code, '| message:', error.message, '| details:', error.details, '| hint:', error.hint);
+      throw new Error(`saveOccasionEvent: ${error.message} (code: ${error.code})`);
+    }
+    console.log('[saveOccasionEvent] OK — uid:', uid, 'eventId:', event.id);
   }
 
   async updateOccasionEvent(id: string, updates: Partial<OccasionEvent>): Promise<void> {
