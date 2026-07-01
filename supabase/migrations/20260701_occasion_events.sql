@@ -11,13 +11,13 @@ create table if not exists public.occasion_events (
       'Casual', 'Formal Event', 'Family', 'Date Night', 'Other'
     )),
   event_date date not null,
-  start_time text nullable,
-  end_time text nullable,
-  city text nullable,
-  country text nullable,
-  latitude numeric nullable,
-  longitude numeric nullable,
-  country_code text nullable,
+  start_time text,
+  end_time text,
+  city text,
+  country text,
+  latitude numeric,
+  longitude numeric,
+  country_code text,
   formality text not null default 'Smart Casual'
     check (formality in ('Casual', 'Smart Casual', 'Business', 'Cocktail', 'Formal', 'Black Tie')),
   dress_code text nullable
@@ -27,9 +27,9 @@ create table if not exists public.occasion_events (
     )),
   importance text not null default 'Normal'
     check (importance in ('Low', 'Normal', 'High', 'Critical')),
-  notes text nullable,
-  weather_context jsonb nullable,
-  recommended_outfit jsonb nullable,
+  notes text,
+  weather_context jsonb,
+  recommended_outfit jsonb,
   outfit_status text not null default 'pending'
     check (outfit_status in ('pending', 'accepted', 'rejected', 'edited')),
   created_at timestamptz not null default now(),

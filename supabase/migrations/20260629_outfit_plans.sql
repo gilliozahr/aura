@@ -5,15 +5,15 @@ create table if not exists public.outfit_plans (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   plan_date date not null,
-  occasion_event_id uuid nullable,
-  trip_plan_id uuid nullable,
+  occasion_event_id uuid ,
+  trip_plan_id uuid ,
   outfit_items jsonb not null default '[]',
   recommendation jsonb not null default '{}',
   status text not null default 'planned'
     check (status in ('planned', 'worn', 'skipped', 'changed')),
   source text not null default 'planner'
     check (source in ('planner', 'manual', 'occasion', 'trip', 'daily')),
-  notes text nullable,
+  notes text ,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique(user_id, plan_date)
