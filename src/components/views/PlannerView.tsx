@@ -3,9 +3,13 @@
 import { useState, useCallback } from 'react';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
+import { getRepository } from '@/lib/repository';
+import { generatePlannerWeek } from '@/lib/planner/engine';
 import type { PlannerWeek, PlannerDay, OutfitPlan, PlannerStatus, View } from '@/lib/types';
 
-type Phase = 'idle' | 'generating' | 'ready' | 'error';
+type Phase = 'idle' | 'generating' | 'ready' | 'error' | 'auth-required';
+
+const IS_LOCAL_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 function getMondayOfWeek(date: Date): string {
   const d = new Date(date);
@@ -219,41 +223,70 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     setPhase('generating');
     setErrorMsg('');
     try {
-      const res = await fetch('/api/planner/generate-week', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weekStart }),
-      });
-      const data = (await res.json()) as { week?: PlannerWeek; error?: string };
-      if (!res.ok || !data.week) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setWeek(data.week);
-      setPhase('ready');
+      if (IS_LOCAL_MODE) {
+        const week = generatePlannerWeek({
+          weekStart,
+          wardrobe: state.wardrobe,
+          styleDNA: state.styleDNA,
+          savedOutfits: [],
+          existingPlans: state.outfitPlans ?? [],
+          occasionEvents: state.occasionEvents ?? [],
+          tripPlans: state.tripPlans ?? [],
+        });
+        setWeek(week);
+        setPhase('ready');
+      } else {
+        const res = await fetch('/api/planner/generate-week', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ weekStart }),
+        });
+        if (res.status === 401) { setPhase('auth-required'); return; }
+        const data = (await res.json()) as { week?: PlannerWeek; error?: string };
+        if (!res.ok || !data.week) throw new Error(data.error ?? `HTTP ${res.status}`);
+        setWeek(data.week);
+        setPhase('ready');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setErrorMsg(msg);
       setPhase('error');
     }
-  }, [weekStart]);
+  }, [weekStart, state]);
 
   const handleAccept = useCallback(async (day: PlannerDay) => {
     if (!day.suggestedOutfit) return;
     setActionLoading(true);
     try {
-      const res = await fetch('/api/planner/save-day', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let saved: OutfitPlan;
+      if (IS_LOCAL_MODE) {
+        saved = await getRepository().saveOutfitPlan({
+          userId: 'local',
           planDate: day.date,
           outfitItems: day.suggestedOutfit.outfitItems,
+          recommendation: day.suggestedOutfit,
+          status: 'planned',
+          source: 'planner',
           occasionEventId: day.occasionEvents[0]?.id,
-        }),
-      });
-      const data = (await res.json()) as { plan?: OutfitPlan; error?: string };
-      if (!res.ok || !data.plan) throw new Error(data.error ?? 'Failed');
-      dispatch({ type: 'UPSERT_OUTFIT_PLAN', payload: data.plan });
+        });
+      } else {
+        const res = await fetch('/api/planner/save-day', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planDate: day.date,
+            outfitItems: day.suggestedOutfit.outfitItems,
+            occasionEventId: day.occasionEvents[0]?.id,
+          }),
+        });
+        const data = (await res.json()) as { plan?: OutfitPlan; error?: string };
+        if (!res.ok || !data.plan) throw new Error(data.error ?? 'Failed');
+        saved = data.plan;
+      }
+      dispatch({ type: 'UPSERT_OUTFIT_PLAN', payload: saved });
       setWeek(prev => prev ? {
         ...prev,
-        days: prev.days.map(d => d.date === day.date ? { ...d, plannedOutfit: data.plan } : d),
+        days: prev.days.map(d => d.date === day.date ? { ...d, plannedOutfit: saved } : d),
       } : prev);
       toast(`Outfit planned for ${day.dayLabel}`);
     } catch (err) {
@@ -267,17 +300,23 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     if (!day.plannedOutfit) return;
     setActionLoading(true);
     try {
-      const res = await fetch('/api/planner/update-day', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planDate: day.date, status: 'worn' as PlannerStatus }),
-      });
-      const data = (await res.json()) as { plan?: OutfitPlan; error?: string };
-      if (!res.ok || !data.plan) throw new Error(data.error ?? 'Failed');
-      dispatch({ type: 'UPSERT_OUTFIT_PLAN', payload: data.plan });
+      let updated: OutfitPlan;
+      if (IS_LOCAL_MODE) {
+        updated = await getRepository().updateOutfitPlan(day.date, { status: 'worn' });
+      } else {
+        const res = await fetch('/api/planner/update-day', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planDate: day.date, status: 'worn' as PlannerStatus }),
+        });
+        const data = (await res.json()) as { plan?: OutfitPlan; error?: string };
+        if (!res.ok || !data.plan) throw new Error(data.error ?? 'Failed');
+        updated = data.plan;
+      }
+      dispatch({ type: 'UPSERT_OUTFIT_PLAN', payload: updated });
       setWeek(prev => prev ? {
         ...prev,
-        days: prev.days.map(d => d.date === day.date ? { ...d, plannedOutfit: data.plan } : d),
+        days: prev.days.map(d => d.date === day.date ? { ...d, plannedOutfit: updated } : d),
       } : prev);
       toast(`Marked worn for ${day.dayLabel}`);
     } catch (err) {
@@ -290,12 +329,16 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
   const handleClear = useCallback(async (day: PlannerDay) => {
     setActionLoading(true);
     try {
-      const res = await fetch('/api/planner/clear-day', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planDate: day.date }),
-      });
-      if (!res.ok) throw new Error('Failed');
+      if (IS_LOCAL_MODE) {
+        await getRepository().deleteOutfitPlan(day.date);
+      } else {
+        const res = await fetch('/api/planner/clear-day', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planDate: day.date }),
+        });
+        if (!res.ok) throw new Error('Failed');
+      }
       dispatch({ type: 'DELETE_OUTFIT_PLAN', planDate: day.date });
       setWeek(prev => prev ? {
         ...prev,
@@ -312,19 +355,33 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
   const handleReplace = useCallback(async (day: PlannerDay) => {
     setActionLoading(true);
     try {
-      const res = await fetch('/api/planner/generate-week', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weekStart }),
-      });
-      const data = (await res.json()) as { week?: PlannerWeek; error?: string };
-      if (!res.ok || !data.week) throw new Error(data.error ?? 'Failed');
-      const newDay = data.week.days.find(d => d.date === day.date);
+      let newDay: PlannerDay | undefined;
+      if (IS_LOCAL_MODE) {
+        const freshWeek = generatePlannerWeek({
+          weekStart,
+          wardrobe: state.wardrobe,
+          styleDNA: state.styleDNA,
+          savedOutfits: [],
+          existingPlans: state.outfitPlans ?? [],
+          occasionEvents: state.occasionEvents ?? [],
+          tripPlans: state.tripPlans ?? [],
+        });
+        newDay = freshWeek.days.find(d => d.date === day.date);
+      } else {
+        const res = await fetch('/api/planner/generate-week', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ weekStart }),
+        });
+        const data = (await res.json()) as { week?: PlannerWeek; error?: string };
+        if (!res.ok || !data.week) throw new Error(data.error ?? 'Failed');
+        newDay = data.week.days.find(d => d.date === day.date);
+      }
       if (newDay) {
         setWeek(prev => prev ? {
           ...prev,
-          days: prev.days.map(d => d.date === day.date ? newDay : d),
-        } : (data.week ?? null));
+          days: prev.days.map(d => d.date === day.date ? newDay! : d),
+        } : prev);
       }
       toast(`Replaced suggestion for ${day.dayLabel}`);
     } catch (err) {
@@ -332,7 +389,7 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     } finally {
       setActionLoading(false);
     }
-  }, [weekStart, toast]);
+  }, [weekStart, state, toast]);
 
   const hasMinWardrobe = state.wardrobe.length >= 4;
 
@@ -391,6 +448,19 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
           Next →
         </button>
       </div>
+
+      {phase === 'auth-required' && (
+        <div className="card" style={{ padding: '1.5rem', marginBottom: 16, textAlign: 'center' }}>
+          <p className="eyebrow" style={{ marginBottom: 8 }}>Sign in required</p>
+          <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
+            The Outfit Planner syncs across your devices using your AURA account.<br />
+            Sign in to generate and save outfit plans.
+          </p>
+          <button className="primary" onClick={() => onNavigate?.('settings')}>
+            Go to Settings to sign in
+          </button>
+        </div>
+      )}
 
       {phase === 'error' && (
         <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: 16, borderColor: '#dc2626', background: 'rgba(220,38,38,0.05)' }}>
