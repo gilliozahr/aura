@@ -232,6 +232,38 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     }
   }, [user, isLocalMode, phase]);
 
+  // Restore week display from persisted outfitPlans when component mounts or weekStart changes.
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    const plans = (state.outfitPlans ?? []);
+    const weekEnd = addWeeks(weekStart, 1);
+    const weekPlans = plans.filter(p => p.planDate >= weekStart && p.planDate < weekEnd);
+    if (weekPlans.length === 0) return;
+
+    const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const days: PlannerDay[] = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + i);
+      const date = d.toISOString().slice(0, 10);
+      const plan = weekPlans.find(p => p.planDate === date);
+      return {
+        date,
+        dayLabel: DAY_LABELS[i],
+        occasionEvents: (state.occasionEvents ?? []).filter(e => e.date === date),
+        tripPlans: (state.tripPlans ?? []).filter(t => t.startDate <= date && t.endDate >= date),
+        plannedOutfit: plan,
+        suggestedOutfit: plan?.recommendation,
+        wardrobeWarnings: [],
+        repeatWarnings: [],
+        missingItems: [],
+      };
+    });
+
+    setWeek({ weekStart, days, globalWarnings: [], generatedAt: weekPlans[0].createdAt, aiEnhanced: false });
+    setPhase('ready');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart, state.outfitPlans]);
+
   const handleGenerate = useCallback(async () => {
     setPhase('generating');
     setErrorMsg('');

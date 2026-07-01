@@ -161,7 +161,7 @@ export class SupabaseRepository implements IRepository {
     if (!authUser) return defaultState();
     const uid = authUser.id;
 
-    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes, tripPlansRes, occasionEventsRes] =
+    const [profileRes, wardrobeRes, inspirationsRes, ordersRes, bookingsRes, feedbackRes, outfitsRes, dnaRes, tripPlansRes, occasionEventsRes, outfitPlansRes] =
       await Promise.all([
         this.client.from('user_profiles').select('*').eq('id', uid).single(),
         this.client.from('wardrobe_items').select('*').eq('user_id', uid),
@@ -173,6 +173,7 @@ export class SupabaseRepository implements IRepository {
         this.client.from('style_dna_profiles').select('*').eq('user_id', uid).maybeSingle(),
         this.client.from('trip_plans').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
         this.client.from('occasion_events').select('*').eq('user_id', uid).order('event_date', { ascending: true }),
+        this.client.from('outfit_plans').select('*').eq('user_id', uid).order('plan_date', { ascending: true }),
       ]);
 
     if (wardrobeRes.error) console.error('[SupabaseRepository] loadState/wardrobe:', wardrobeRes.error.message);
@@ -361,7 +362,22 @@ export class SupabaseRepository implements IRepository {
 
     const occasionEvents: OccasionEvent[] = ((occasionEventsRes.data ?? []) as unknown as OccasionEventRow[]).map(rowToOccasionEvent);
 
-    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans, occasionEvents, shoppingProducts: [], shoppingRecommendations: [], outfitPlans: [] };
+    const outfitPlans = ((outfitPlansRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+      id: r.id as string,
+      userId: r.user_id as string,
+      planDate: r.plan_date as string,
+      occasionEventId: (r.occasion_event_id as string | null) ?? undefined,
+      tripPlanId: (r.trip_plan_id as string | null) ?? undefined,
+      outfitItems: (r.outfit_items as WardrobeItem[]) ?? [],
+      recommendation: r.recommendation as PlannerRecommendation,
+      status: (r.status as PlannerStatus) ?? 'planned',
+      source: (r.source as PlannerSource) ?? 'planner',
+      notes: (r.notes as string | null) ?? undefined,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    }));
+
+    return { user, wardrobe, inspirations, outfits, orders, stylistBookings, feedback, styleDNA, tripPlans, occasionEvents, shoppingProducts: [], shoppingRecommendations: [], outfitPlans };
   }
 
   private assertNoError(error: { message: string } | null, ctx: string): void {
