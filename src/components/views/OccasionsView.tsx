@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAura } from '@/store';
+import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
+import { LocalRepository, SupabaseRepository } from '@/lib/repository';
 import { uid } from '@/lib/utils';
 import type {
   DressCode,
@@ -333,9 +335,15 @@ const EMPTY_FORM: FormState = {
 export default function OccasionsView() {
   const { state, dispatch } = useAura();
   const { toast } = useToast();
+  const { isSupabaseConfigured } = useAuth();
+  const repo = useMemo(
+    () => (isSupabaseConfigured ? new SupabaseRepository() : new LocalRepository()),
+    [isSupabaseConfigured]
+  );
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loadingRecommendation, setLoadingRecommendation] = useState<string | null>(null);
 
   // City lookup
@@ -383,6 +391,7 @@ export default function OccasionsView() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title || !form.date) { toast('Title and date are required.'); return; }
+    setSaveError(null);
     setSubmitting(true);
     try {
       const newEvent: OccasionEvent = {
@@ -405,13 +414,21 @@ export default function OccasionsView() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      // Await the DB write directly — form stays open if save fails.
+      await repo.saveOccasionEvent(newEvent);
+      // Only update UI state after confirmed DB write.
       dispatch({ type: 'ADD_OCCASION_EVENT', payload: newEvent });
       setForm(EMPTY_FORM);
       setCountryHint(null);
       setCountryManuallySet(false);
       detectedCoordsRef.current = {};
       setShowForm(false);
-      toast('Event added.');
+      toast('Event saved.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[OccasionsView] save failed:', msg);
+      setSaveError(msg);
+      toast(`Failed to save event: ${msg}`);
     } finally {
       setSubmitting(false);
     }
@@ -599,9 +616,14 @@ export default function OccasionsView() {
                 />
               </div>
             </div>
+            {saveError && (
+              <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.85rem', borderRadius: 8, background: 'rgba(200,50,50,0.08)', border: '1px solid rgba(200,50,50,0.25)', fontSize: 13, color: '#c03030' }}>
+                Save failed: {saveError}
+              </div>
+            )}
             <div style={{ marginTop: '1rem', display: 'flex', gap: 8 }}>
               <button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save Event'}</button>
-              <button type="button" className="secondary" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setCountryHint(null); }}>
+              <button type="button" className="secondary" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setCountryHint(null); setSaveError(null); }}>
                 Cancel
               </button>
             </div>
