@@ -1,43 +1,30 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useState, type FormEvent } from 'react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useSupabaseSession } from '@/lib/hooks/useSupabaseSession';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-const IS_LOCAL_MODE = !SUPABASE_URL;
+const IS_LOCAL_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 function AccountSection() {
   const { toast } = useToast();
   const [email, setEmail] = useState('');
-  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
   const [password, setPassword] = useState('');
-
-  const client = IS_LOCAL_MODE ? null : createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  useEffect(() => {
-    if (!client) { setLoading(false); return; }
-    client.auth.getSession().then(({ data }) => {
-      setSessionEmail(data.session?.user?.email ?? null);
-      setLoading(false);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { session, loading } = useSupabaseSession();
+  const sessionEmail = session?.user?.email ?? null;
 
   async function handleSignIn(e: FormEvent) {
     e.preventDefault();
+    const client = getSupabaseBrowserClient();
     if (!client) return;
     setSigningIn(true);
     const { error } = await client.auth.signInWithPassword({ email, password });
     if (error) {
       toast(`Sign in failed: ${error.message}`);
     } else {
-      const { data } = await client.auth.getSession();
-      setSessionEmail(data.session?.user?.email ?? null);
       setPassword('');
       toast('Signed in.');
     }
@@ -45,9 +32,9 @@ function AccountSection() {
   }
 
   async function handleSignOut() {
+    const client = getSupabaseBrowserClient();
     if (!client) return;
     await client.auth.signOut();
-    setSessionEmail(null);
     toast('Signed out.');
   }
 

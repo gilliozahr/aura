@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { getRepository } from '@/lib/repository';
 import { generatePlannerWeek } from '@/lib/planner/engine';
+import { useSupabaseSession } from '@/lib/hooks/useSupabaseSession';
 import type { PlannerWeek, PlannerDay, OutfitPlan, PlannerStatus, View } from '@/lib/types';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error' | 'auth-required';
@@ -211,6 +212,7 @@ function DayCard({
 export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) => void }) {
   const { state, dispatch } = useAura();
   const { toast } = useToast();
+  const { session, loading: sessionLoading } = useSupabaseSession();
 
   const today = new Date().toISOString().slice(0, 10);
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()));
@@ -218,6 +220,13 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
   const [week, setWeek] = useState<PlannerWeek | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // When a Supabase session arrives (e.g. after sign-in in Settings), clear auth-required.
+  useEffect(() => {
+    if (!IS_LOCAL_MODE && session && phase === 'auth-required') {
+      setPhase('idle');
+    }
+  }, [session, phase]);
 
   const handleGenerate = useCallback(async () => {
     setPhase('generating');
@@ -424,7 +433,7 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
         <button
           className="primary"
           onClick={handleGenerate}
-          disabled={phase === 'generating'}
+          disabled={phase === 'generating' || (!IS_LOCAL_MODE && sessionLoading)}
           style={{ flexShrink: 0 }}
         >
           {phase === 'generating' ? 'Generating…' : '✦ Generate Week'}
