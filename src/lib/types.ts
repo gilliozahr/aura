@@ -1,10 +1,100 @@
+export interface WeatherContext {
+  city: string;
+  temperatureC: number;
+  condition: string;
+  humidity?: number;
+  feelsLikeC?: number;
+  available: boolean;
+  timestamp: string;
+}
+
+// ── Size profile ──────────────────────────────────────────────────────────────
+
+export type PreferredFit = 'Slim' | 'Regular' | 'Relaxed' | 'Oversized';
+
+export type MeasurementUnit = 'cm' | 'in';
+
+export interface UserSizeProfile {
+  measurementUnit?: MeasurementUnit;
+  // Numeric measurements are stored in the unit indicated by measurementUnit (default: cm)
+  heightCm?: number;
+  weightKg?: number;
+  chestCm?: number;
+  waistCm?: number;
+  hipsCm?: number;
+  shoulderCm?: number;
+  inseamCm?: number;
+  neckCm?: number;
+  sleeveCm?: number;
+  shoeSizeEU?: number;
+  shoeSizeUK?: number;
+  shoeSizeUS?: number;
+  preferredFit?: PreferredFit;
+  topSize?: string;
+  bottomSize?: string;
+  blazerSize?: string;
+  notes?: string;
+}
+
 export interface UserProfile {
   name: string;
   city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
   temperature: number;
   occasion: string;
   styleGoal: string;
   budget: number;
+  sizeProfile?: UserSizeProfile;
+}
+
+export type LocationSource = 'browser' | 'profile' | 'fallback';
+
+export interface LocationContext {
+  city: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  source: LocationSource;
+  label: string;
+  timestamp: string;
+}
+
+export type VisionFallbackReason =
+  | 'missing_openai_key'
+  | 'missing_anthropic_key'
+  | 'openai_http_401'
+  | 'openai_http_429'
+  | 'openai_http_error'
+  | 'openai_parse_error'
+  | 'openai_vision_error'
+  | 'anthropic_http_401'
+  | 'anthropic_http_429'
+  | 'anthropic_http_error'
+  | 'anthropic_parse_error'
+  | 'anthropic_vision_error'
+  | 'invalid_image_url'
+  | 'unsupported_image_format';
+
+export interface WardrobeAIMetadata {
+  detectedCategory: string;
+  detectedColor: string;
+  detectedStyle: string;
+  detectedSeason: string;
+  detectedOccasion: string;
+  confidence: number;
+  tags: string[];
+  analysisNote: string;
+  correctedFields?: string[];
+  /** The provider that was configured (e.g. 'openai', 'mock') */
+  providerRequested: string;
+  /** The provider that actually ran the analysis (may differ if fallback used) */
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+  fallbackReason?: VisionFallbackReason;
+  analyzedAt: string;
 }
 
 export interface WardrobeItem {
@@ -18,15 +108,37 @@ export interface WardrobeItem {
   wears: number;
   confidence: number;
   image: string;
+  aiMetadata?: WardrobeAIMetadata;
+}
+
+export interface ReportDebugMeta {
+  provider: string;
+  mode: 'real' | 'mock';
+  model: string;
+  latencyMs: number;
+  fallbackUsed: boolean;
 }
 
 export interface InspirationReport {
-  duplicateCount: number;
-  styleMatch: number;
-  wardrobeImpact: number;
-  budgetFit: number;
-  score: number;
+  // Core scores 0–100
+  compatibilityScore: number;
+  styleMatchScore: number;
+  wardrobeImpactScore: number;
+  budgetFitScore: number;
+  /** 0 = no duplicates, higher = more redundancy */
+  duplicateRisk: number;
+  /** Model confidence in its own analysis */
+  confidence: number;
   decision: 'BUY' | 'WAIT' | 'SKIP';
+  // Qualitative fields
+  reasoningSummary: string;
+  whyItWorks: string;
+  risks: string[];
+  suggestedOutfits: string[];
+  betterAlternatives: string[];
+  missingWardrobeOpportunities: string[];
+  /** Safe debug metadata — never contains API keys */
+  _meta?: ReportDebugMeta;
 }
 
 export interface InspirationItem {
@@ -56,15 +168,173 @@ export interface StylistBooking {
   status: string;
 }
 
+export interface OutfitReport {
+  outfitItems: string[]; // WardrobeItem IDs
+  compatibilityScore: number;
+  occasionFitScore: number;
+  weatherFitScore: number;
+  styleMatchScore: number;
+  colorHarmonyScore: number;
+  confidence: number;
+  reasoningSummary: string;
+  whyItWorks: string;
+  risks: string[];
+  missingItems: string[];
+  alternatives: string[];
+  _meta?: ReportDebugMeta;
+}
+
+export interface SavedOutfit {
+  id: string;
+  outfitItems: WardrobeItem[];
+  report: OutfitReport;
+  feedback?: 'accepted' | 'rejected';
+  createdAt: string;
+}
+
 export interface FeedbackEvent {
   id: string;
   type: string;
   score: number;
+  payload?: Record<string, unknown>;
   at: string;
 }
 
-export type OccasionFormality = 'Casual' | 'Smart Casual' | 'Business' | 'Cocktail' | 'Formal' | 'Black Tie';
-export type OccasionType = 'work' | 'social' | 'travel' | 'sport' | 'formal' | 'other';
+// ── Style DNA ─────────────────────────────────────────────────────────────────
+
+export interface StyleDNAEntry {
+  value: string;
+  score: number;
+}
+
+export interface StyleDNAProfile {
+  preferredColors: StyleDNAEntry[];
+  avoidedColors: StyleDNAEntry[];
+  preferredCategories: StyleDNAEntry[];
+  preferredStyleTags: StyleDNAEntry[];
+  avoidedStyleTags: StyleDNAEntry[];
+  preferredOccasions: StyleDNAEntry[];
+  wardrobeGaps: string[];
+  favoriteOutfitPatterns: string[];
+  rejectedOutfitPatterns: string[];
+  confidenceScore: number;
+  signalCount: number;
+  lastComputedAt: string;
+}
+
+export interface StyleDNASummary {
+  preferredColors: string[];
+  preferredStyleTags: string[];
+  avoidedStyleTags: string[];
+  preferredOccasions: string[];
+  wardrobeGaps: string[];
+  confidenceScore: number;
+}
+
+// ── Packing + Trip Intelligence ──────────────────────────────────────────────
+
+export interface TravelWeather {
+  date?: string;
+  temperatureC: number;
+  condition: string;
+  humidity?: number;
+  feelsLikeC?: number;
+  available: boolean;
+  city: string;
+  source: string;
+}
+
+export interface TripOccasion {
+  date: string;
+  label: string;
+  formality: 'casual' | 'smart-casual' | 'business' | 'formal';
+  notes?: string;
+}
+
+export interface TripDailyOutfit {
+  date: string;
+  occasion: string;
+  weather?: string;
+  items: string[]; // wardrobe item names
+  outfitScore?: number;
+  reasoning: string;
+  risks?: string[];
+}
+
+export interface PackingItem {
+  id: string;
+  name: string;
+  category: string;
+  source: 'wardrobe' | 'suggested' | 'missing';
+  wardrobeItemId?: string;
+  quantity: number;
+  packed: boolean;
+  reason: string;
+  priority: 'essential' | 'recommended' | 'optional';
+}
+
+export interface MissingItem {
+  name: string;
+  category: string;
+  reason: string;
+  priority: 'essential' | 'recommended' | 'optional';
+}
+
+export interface TripPlan {
+  id: string;
+  destinationCity: string;
+  destinationCountry?: string;
+  startDate: string;
+  endDate: string;
+  purpose: string;
+  occasions: TripOccasion[];
+  luggageType: string;
+  laundryAvailable: boolean;
+  weatherSummary?: TravelWeather;
+  dailyOutfits: TripDailyOutfit[];
+  packingItems: PackingItem[];
+  missingItems: MissingItem[];
+  riskNotes: string[];
+  capsuleNotes?: string;
+  aiSummary?: string;
+  aiEnhanced: boolean;
+  createdAt: string;
+}
+
+// ── Occasion / Calendar Intelligence (v0.9) ───────────────────────────────
+
+export type OccasionType =
+  | 'Business Meeting'
+  | 'Dinner'
+  | 'Wedding'
+  | 'Brunch'
+  | 'Travel'
+  | 'Casual'
+  | 'Formal Event'
+  | 'Family'
+  | 'Date Night'
+  | 'Other';
+
+export type OccasionFormality =
+  | 'Casual'
+  | 'Smart Casual'
+  | 'Business'
+  | 'Cocktail'
+  | 'Formal'
+  | 'Black Tie';
+
+export interface OccasionOutfitRecommendation {
+  items: string[];
+  outfitScore: number;
+  formalityFitScore: number;
+  weatherFitScore: number;
+  styleDNAFitScore: number;
+  reasoning: string;
+  risks: string[];
+  missingItems: MissingItem[];
+  alternatives: string[];
+  aiEnhanced?: boolean;
+}
 
 export interface OccasionEvent {
   id: string;
@@ -75,75 +345,117 @@ export interface OccasionEvent {
   endTime?: string;
   city?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
+  countryCode?: string;
   formality: OccasionFormality;
   notes?: string;
-  outfitStatus: 'pending' | 'planned' | 'worn';
+  weatherContext?: TravelWeather;
+  recommendedOutfit?: OccasionOutfitRecommendation;
+  outfitStatus: 'pending' | 'accepted' | 'rejected' | 'edited';
   createdAt: string;
   updatedAt: string;
 }
 
-export interface StyleTagEntry {
-  value: string;
-  weight: number;
+export interface WeeklyOccasionBrief {
+  upcomingEvents: OccasionEvent[];
+  preparedEvents: OccasionEvent[];
+  unpreparedEvents: OccasionEvent[];
+  missingItems: MissingItem[];
+  weatherRisks: string[];
+  summary: string;
 }
 
-export interface StyleDNAProfile {
-  preferredColors: Array<{ value: string; weight: number }>;
-  avoidedColors: Array<{ value: string; weight: number }>;
-  preferredCategories: Array<{ value: string; weight: number }>;
-  preferredStyleTags: StyleTagEntry[];
-  avoidedStyleTags: StyleTagEntry[];
-  preferredOccasions: Array<{ value: string; weight: number }>;
-  wardrobeGaps: string[];
-  favoriteOutfitPatterns: string[];
-  rejectedOutfitPatterns: string[];
-  confidenceScore: number;
-  signalCount: number;
-  lastComputedAt: string;
-}
+// ── Shopping Link Intelligence (v1.2) ─────────────────────────────────────
 
-export interface SavedOutfit {
+export type ShoppingDecision = 'Buy' | 'Wait' | 'Skip';
+
+export type ShoppingExtractionSource =
+  | 'metadata'
+  | 'open_graph'
+  | 'json_ld'
+  | 'manual'
+  | 'screenshot';
+
+export type ShoppingExtractionStatus =
+  | 'success'
+  | 'partial'
+  | 'manual_required'
+  | 'blocked'
+  | 'error';
+
+export interface ShoppingProduct {
   id: string;
-  outfitItems: WardrobeItem[];
-  report: {
-    score: number;
-    explanation: string;
-  };
-  feedback?: 'liked' | 'disliked';
+  url: string;
+  title?: string;
+  brand?: string;
+  price?: number;
+  currency?: string;
+  category?: string;
+  color?: string;
+  material?: string;
+  description?: string;
+  imageUrls: string[];
+  availableSizes: string[];
+  sizeGuide: Record<string, unknown>;
+  extractedAt?: string;
+  extractionSource?: ShoppingExtractionSource;
+  extractionStatus?: ShoppingExtractionStatus;
   createdAt: string;
 }
 
-export interface TripPlan {
+export interface ShoppingRecommendation {
   id: string;
-  destinationCity: string;
-  destinationCountry?: string;
-  startDate: string;
-  endDate: string;
-  purpose: string;
-  occasions: OccasionEvent[];
-  luggageType: string;
-  laundryAvailable: boolean;
-  dailyOutfits: Array<{ date: string; items: WardrobeItem[] }>;
-  packingItems: WardrobeItem[];
-  missingItems: Array<{ name: string; category: string }>;
-  riskNotes: string[];
+  productId: string;
+  decision: ShoppingDecision;
+  confidenceScore: number;
+  wardrobeMatchScore: number;
+  styleDNAFitScore: number;
+  sizeFitScore: number;
+  duplicateRiskScore: number;
+  occasionUsefulnessScore: number;
+  tripUsefulnessScore: number;
+  reasoning: string;
+  risks: string[];
+  sizeNotes?: string;
+  wardrobeMatches: string[];
+  outfitIdeas: string[];
+  missingGapMatch: { gap?: string; relevant?: boolean };
+  alternatives: string[];
+  aiEnhanced?: boolean;
+  createdAt: string;
+}
+
+export interface ShoppingSiteRecommendation {
+  domain: string;
+  brandName: string;
+  focusCategories: string[];
+  avoidCategories: string[];
+  reasoning: string;
+  styleNotes: string;
+  confidenceScore: number;
+  wardrobeGapMatches: string[];
+  sizeNotes: string;
+  occasionNotes: string[];
   aiEnhanced: boolean;
   createdAt: string;
 }
+
+// ── App State ─────────────────────────────────────────────────────────────────
 
 export interface AppState {
   user: UserProfile;
   wardrobe: WardrobeItem[];
   inspirations: InspirationItem[];
-  outfits: unknown[];
+  outfits: SavedOutfit[];
   orders: Order[];
   stylistBookings: StylistBooking[];
   feedback: FeedbackEvent[];
   styleDNA?: StyleDNAProfile;
-  tripPlans?: TripPlan[];
-  occasionEvents?: OccasionEvent[];
-  shoppingProducts?: unknown[];
-  shoppingRecommendations?: unknown[];
+  tripPlans: TripPlan[];
+  occasionEvents: OccasionEvent[];
+  shoppingProducts: ShoppingProduct[];
+  shoppingRecommendations: ShoppingRecommendation[];
   outfitPlans: OutfitPlan[];
 }
 
@@ -159,6 +471,8 @@ export type View =
   | 'analytics'
   | 'settings';
 
+// ── Outfit Planner / Smart Closet Calendar (v1.3) ─────────────────────────
+
 export type PlannerStatus = 'planned' | 'worn' | 'skipped' | 'changed';
 export type PlannerSource = 'planner' | 'manual' | 'occasion' | 'trip' | 'daily';
 
@@ -168,7 +482,7 @@ export interface PlannerRecommendation {
   reason: string;
   warnings: string[];
   missingCategories: string[];
-  aiEnhanced: boolean;
+  aiEnhanced?: boolean;
 }
 
 export interface OutfitPlan {

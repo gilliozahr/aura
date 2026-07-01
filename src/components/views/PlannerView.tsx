@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAura } from '@/store';
+import { useAuth } from '@/store/auth';
 import { useToast } from '@/store/toast';
-import { getRepository } from '@/lib/repository';
+import { LocalRepository, SupabaseRepository } from '@/lib/repository';
 import { generatePlannerWeek } from '@/lib/planner/engine';
-import { useSupabaseSession } from '@/lib/hooks/useSupabaseSession';
 import type { PlannerWeek, PlannerDay, OutfitPlan, PlannerStatus, View } from '@/lib/types';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error' | 'auth-required';
-
-const IS_LOCAL_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 function getMondayOfWeek(date: Date): string {
   const d = new Date(date);
@@ -212,7 +210,13 @@ function DayCard({
 export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) => void }) {
   const { state, dispatch } = useAura();
   const { toast } = useToast();
-  const { session, loading: sessionLoading } = useSupabaseSession();
+  const { user, loading: sessionLoading, isSupabaseConfigured } = useAuth();
+  const isLocalMode = !isSupabaseConfigured;
+
+  const repo = useMemo(
+    () => (isSupabaseConfigured ? new SupabaseRepository() : new LocalRepository()),
+    [isSupabaseConfigured]
+  );
 
   const today = new Date().toISOString().slice(0, 10);
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()));
@@ -221,18 +225,18 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // When a Supabase session arrives (e.g. after sign-in in Settings), clear auth-required.
+  // When user signs in, clear auth-required phase automatically.
   useEffect(() => {
-    if (!IS_LOCAL_MODE && session && phase === 'auth-required') {
+    if (!isLocalMode && user && phase === 'auth-required') {
       setPhase('idle');
     }
-  }, [session, phase]);
+  }, [user, isLocalMode, phase]);
 
   const handleGenerate = useCallback(async () => {
     setPhase('generating');
     setErrorMsg('');
     try {
-      if (IS_LOCAL_MODE) {
+      if (isLocalMode) {
         const week = generatePlannerWeek({
           weekStart,
           wardrobe: state.wardrobe,
@@ -268,8 +272,8 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     setActionLoading(true);
     try {
       let saved: OutfitPlan;
-      if (IS_LOCAL_MODE) {
-        saved = await getRepository().saveOutfitPlan({
+      if (isLocalMode) {
+        saved = await repo.saveOutfitPlan({
           userId: 'local',
           planDate: day.date,
           outfitItems: day.suggestedOutfit.outfitItems,
@@ -303,15 +307,15 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     } finally {
       setActionLoading(false);
     }
-  }, [dispatch, toast]);
+  }, [dispatch, toast, repo, isLocalMode]);
 
   const handleMarkWorn = useCallback(async (day: PlannerDay) => {
     if (!day.plannedOutfit) return;
     setActionLoading(true);
     try {
       let updated: OutfitPlan;
-      if (IS_LOCAL_MODE) {
-        updated = await getRepository().updateOutfitPlan(day.date, { status: 'worn' });
+      if (isLocalMode) {
+        updated = await repo.updateOutfitPlan(day.date, { status: 'worn' });
       } else {
         const res = await fetch('/api/planner/update-day', {
           method: 'PATCH',
@@ -333,13 +337,13 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     } finally {
       setActionLoading(false);
     }
-  }, [dispatch, toast]);
+  }, [dispatch, toast, repo, isLocalMode]);
 
   const handleClear = useCallback(async (day: PlannerDay) => {
     setActionLoading(true);
     try {
-      if (IS_LOCAL_MODE) {
-        await getRepository().deleteOutfitPlan(day.date);
+      if (isLocalMode) {
+        await repo.deleteOutfitPlan(day.date);
       } else {
         const res = await fetch('/api/planner/clear-day', {
           method: 'DELETE',
@@ -359,13 +363,13 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
     } finally {
       setActionLoading(false);
     }
-  }, [dispatch, toast]);
+  }, [dispatch, toast, repo, isLocalMode]);
 
   const handleReplace = useCallback(async (day: PlannerDay) => {
     setActionLoading(true);
     try {
       let newDay: PlannerDay | undefined;
-      if (IS_LOCAL_MODE) {
+      if (isLocalMode) {
         const freshWeek = generatePlannerWeek({
           weekStart,
           wardrobe: state.wardrobe,
@@ -433,7 +437,7 @@ export default function PlannerView({ onNavigate }: { onNavigate?: (view: View) 
         <button
           className="primary"
           onClick={handleGenerate}
-          disabled={phase === 'generating' || (!IS_LOCAL_MODE && sessionLoading)}
+          disabled={phase === 'generating' || (!isLocalMode && sessionLoading)}
           style={{ flexShrink: 0 }}
         >
           {phase === 'generating' ? 'Generating…' : '✦ Generate Week'}

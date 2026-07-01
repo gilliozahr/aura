@@ -1,15 +1,17 @@
 'use client';
 
 import type { View } from '@/lib/types';
+import AuthSection from '@/components/auth/AuthSection';
 
 const NAV_ITEMS: { id: View; label: string }[] = [
   { id: 'home', label: 'Daily Briefing' },
   { id: 'wardrobe', label: 'Wardrobe' },
   { id: 'inspiration', label: 'AI Inspiration' },
+  { id: 'shopping', label: 'Shopping Advisor' },
+  { id: 'packing', label: 'Packing' },
   { id: 'occasions', label: 'Occasions' },
   { id: 'planner', label: 'Planner' },
-  { id: 'packing', label: 'Packing' },
-  { id: 'stylist', label: 'Stylist Network' },
+  { id: 'stylist', label: 'Stylist Concierge' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'settings', label: 'Settings' },
 ];
@@ -26,7 +28,7 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
         <div className="brand-mark">A</div>
         <div>
           <strong>AURA</strong>
-          <span>Style Intelligence OS</span>
+          <span>AI Personal Style OS</span>
         </div>
       </div>
 
@@ -42,10 +44,7 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="sidebar-card">
-        <span className="eyebrow">v1.3.0 Preview</span>
-        <p>Next.js · TypeScript · Supabase · Smart Closet Calendar</p>
-      </div>
+      <AuthSection />
     </aside>
   );
 }

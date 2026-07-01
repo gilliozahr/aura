@@ -1,68 +1,70 @@
 'use client';
 
 import { useAura } from '@/store';
-import { useToast } from '@/store/toast';
-import { uid, scoreClass } from '@/lib/utils';
-import { stylistAgent } from '@aura/agents';
+import { scoreClass } from '@/lib/utils';
 
-function wardrobeGap(wardrobe: { category: string }[]): string {
-  const required = ['Top', 'Bottom', 'Shoes', 'Outerwear'];
-  const missing = required.find(cat => !wardrobe.some(i => i.category === cat));
-  return missing || 'Balanced';
-}
+const CAPABILITIES = [
+  'Personal styling brief built from your Style DNA and wardrobe history',
+  'Expert review of outfit combinations before important occasions',
+  'Human-in-the-loop recommendations for wardrobe gaps',
+  'Video sessions with vetted stylists specialising in your aesthetic',
+  'Priority access to curated wardrobe edits',
+];
 
 export default function StylistView() {
-  const { state, dispatch } = useAura();
-  const { toast } = useToast();
-
-  const match = stylistAgent.match(state);
-  const sc = scoreClass(match.score);
-
-  const avgConf = state.wardrobe.length
-    ? Math.round(state.wardrobe.reduce((s, i) => s + (i.confidence || 75), 0) / state.wardrobe.length)
+  const { state } = useAura();
+  const hasStyleDNA = !!state.styleDNA && state.styleDNA.confidenceScore > 0;
+  const wardrobeItems = state.wardrobe.length;
+  const avgConf = wardrobeItems
+    ? Math.round(state.wardrobe.reduce((s, i) => s + (i.confidence || 75), 0) / wardrobeItems)
     : 0;
 
-  function handleBook() {
-    dispatch({
-      type: 'ADD_STYLIST_BOOKING',
-      payload: {
-        id: uid(),
-        stylist: match.name,
-        at: new Date().toISOString(),
-        status: 'Mock booking requested',
-      },
-    });
-    toast('Mock stylist session booked.');
-  }
-
   return (
-    <div className="grid two">
-      <div className="card">
-        <p className="eyebrow">Human Expertise</p>
-        <h2>Recommended Stylist</h2>
-        <div className={`score ${sc}`}>{match.score}%</div>
-        <h3>{match.name}</h3>
-        <p>{match.reason}</p>
-        <ul className="report-list">
-          <li>Specialty: {match.specialty}</li>
-          <li>Budget fit: {match.budgetFit}%</li>
-          <li>Trust score: {match.trust}%</li>
-          <li>Best for: {state.user.styleGoal} evolution</li>
+    <div className="view-content">
+      <div className="card" style={{ maxWidth: 680, padding: '2rem 2.5rem', marginBottom: '1.5rem' }}>
+        <p className="eyebrow">Coming Next</p>
+        <h2 style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>Stylist Concierge</h2>
+        <p style={{ color: 'var(--muted)', fontSize: '0.95rem', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+          AURA is building a human-in-the-loop styling layer — expert review, personal styling briefs, and curated wardrobe guidance, all grounded in your Style DNA and occasion intelligence.
+        </p>
+
+        <p className="eyebrow" style={{ marginBottom: '0.75rem' }}>What&apos;s coming</p>
+        <ul style={{ margin: '0 0 1.5rem', padding: 0, listStyle: 'none', display: 'grid', gap: 10 }}>
+          {CAPABILITIES.map((c, i) => (
+            <li key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              fontSize: '0.875rem', color: 'var(--muted)', lineHeight: 1.55,
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: 'var(--accent)', flexShrink: 0, marginTop: 6,
+              }} />
+              {c}
+            </li>
+          ))}
         </ul>
-        <button className="primary" onClick={handleBook}>Book Mock Session</button>
+
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: '1.25rem' }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
+            Interested in early access? This feature is in active development for the next AURA release.
+          </p>
+        </div>
       </div>
 
-      <div className="card">
-        <p className="eyebrow">AI Brief</p>
-        <h2>Prepared for stylist</h2>
-        <p>AURA prepares your Style DNA, goals, wardrobe gaps, and current recommendations so the stylist starts with context.</p>
-        <ul className="report-list">
-          <li>Goal: {state.user.styleGoal}</li>
-          <li>Wardrobe items: {state.wardrobe.length}</li>
-          <li>Average confidence: {avgConf}%</li>
-          <li>Known gap: {wardrobeGap(state.wardrobe)}</li>
-        </ul>
-      </div>
+      {(wardrobeItems > 0 || hasStyleDNA) && (
+        <div className="card" style={{ maxWidth: 680, padding: '1.25rem 1.5rem' }}>
+          <p className="eyebrow" style={{ marginBottom: '0.75rem' }}>Your Style Profile — Ready for Handoff</p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '1rem' }}>
+            When Stylist Concierge launches, AURA will automatically prepare a brief from your data so the stylist starts with full context &mdash; no intake form needed.
+          </p>
+          <ul className="report-list" style={{ marginTop: 0 }}>
+            <li>Style goal: <strong>{state.user.styleGoal || 'Not set'}</strong></li>
+            <li>Wardrobe items: <strong>{wardrobeItems}</strong></li>
+            <li>Average confidence: <strong className={`score ${scoreClass(avgConf)}`} style={{ fontSize: 14 }}>{avgConf}%</strong></li>
+            <li>Style DNA: <strong>{hasStyleDNA ? `${state.styleDNA!.confidenceScore}% confidence` : 'Not yet computed'}</strong></li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

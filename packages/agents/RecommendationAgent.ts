@@ -1,6 +1,6 @@
 import type { WardrobeItem, UserProfile } from '@aura/types';
 
-export interface OutfitRecommendation {
+export interface OutfitSelection {
   items: WardrobeItem[];
   score: number;
   explanation: string;
@@ -22,7 +22,7 @@ export class RecommendationAgent {
     return Math.max(0, Math.min(100, Math.round(score)));
   }
 
-  pickBestOutfit(wardrobe: WardrobeItem[], user: UserProfile): OutfitRecommendation {
+  pickBestOutfit(wardrobe: WardrobeItem[], user: UserProfile): OutfitSelection {
     const pick = (category: string) =>
       [...wardrobe.filter(i => i.category === category)].sort(
         (a, b) => this.scoreItem(b, user) - this.scoreItem(a, user)
@@ -45,6 +45,19 @@ export class RecommendationAgent {
       : 'Add clothes to receive recommendations.';
 
     return { items, score, explanation };
+  }
+
+  /** Returns all wardrobe items in the same category as any outfit item, excluding items already in the outfit. */
+  getAlternativesForCategory(
+    category: string,
+    outfit: WardrobeItem[],
+    wardrobe: WardrobeItem[],
+    user: UserProfile
+  ): WardrobeItem[] {
+    const outfitIds = new Set(outfit.map(i => i.id));
+    return wardrobe
+      .filter(i => i.category === category && !outfitIds.has(i.id))
+      .sort((a, b) => this.scoreItem(b, user) - this.scoreItem(a, user));
   }
 }
 

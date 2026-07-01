@@ -5,14 +5,63 @@ import type { FormEvent } from 'react';
 import Image from 'next/image';
 import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
-import { uid, fileToDataURL, scoreClass } from '@/lib/utils';
-import type { InspirationItem } from '@/lib/types';
-import { inspirationAgent, explanationAgent } from '@aura/agents';
+import { uid, fileToDataURL, scoreClass, isDataUrl, isValidItemName } from '@/lib/utils';
+import type { InspirationItem, InspirationReport } from '@/lib/types';
 
-function InspirationReport({ item }: { item: InspirationItem }) {
+// ── Score bar ────────────────────────────────────────────────────────────────
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.max(0, Math.min(100, value));
+  const color = pct >= 75 ? 'var(--accent)' : pct >= 50 ? '#e0a020' : '#e05050';
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+        <span style={{ color: 'var(--muted)' }}>{label}</span>
+        <span style={{ fontWeight: 600 }}>{pct}%</span>
+      </div>
+      <div style={{ background: 'var(--border)', borderRadius: 4, height: 5 }}>
+        <div style={{ width: `${pct}%`, height: 5, borderRadius: 4, background: color, transition: 'width 0.4s' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Section list ─────────────────────────────────────────────────────────────
+
+function Section({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p className="eyebrow" style={{ marginBottom: 4 }}>{title}</p>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
+        {items.map((s, i) => <li key={i}>{s}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+// ── Debug meta ───────────────────────────────────────────────────────────────
+
+function DebugMeta({ meta }: { meta: InspirationReport['_meta'] }) {
+  if (!meta) return null;
+  const fb = meta.fallbackUsed ? ' · fallback' : '';
+  return (
+    <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+      {meta.provider} · {meta.model} · {meta.latencyMs}ms · {meta.mode}{fb}
+    </p>
+  );
+}
+
+// ── Report card ──────────────────────────────────────────────────────────────
+
+function InspirationReportCard({ item }: { item: InspirationItem }) {
   const { dispatch } = useAura();
   const { toast } = useToast();
-  const sc = scoreClass(item.report.score);
+  const r = item.report;
+
+  // Backward compat: old reports stored with field name `score`
+  const score = r.compatibilityScore ?? (r as unknown as { score?: number }).score ?? 0;
+  const sc = scoreClass(score);
 
   function handleOrder() {
     dispatch({
@@ -40,73 +89,183 @@ function InspirationReport({ item }: { item: InspirationItem }) {
         occasion: 'Smart Casual',
         style: item.style,
         wears: 0,
-        confidence: item.report.score,
+        confidence: score,
         image: item.image,
       },
     });
     toast('Inspiration item added to wardrobe.');
   }
 
+  const decisionColors: Record<string, string> = {
+    BUY: '#1a9e50',
+    WAIT: '#cc8800',
+    SKIP: '#cc3333',
+  };
+  const decisionColor = decisionColors[r.decision] ?? '#888';
+
   return (
     <>
       <p className="eyebrow">Compatibility Report</p>
-      <h2>{item.name}</h2>
+      <h2 style={{ marginBottom: 8 }}>{item.name}</h2>
+
       {item.image && (
-        <div style={{ position: 'relative', height: 260, borderRadius: 20, overflow: 'hidden', marginBottom: 14 }}>
-          <Image src={item.image} alt={item.name} fill unoptimized style={{ objectFit: 'cover' }} />
+        <div style={{ position: 'relative', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 14 }}>
+          <Image
+            src={item.image}
+            alt={item.name}
+            fill
+            unoptimized={isDataUrl(item.image)}
+            style={{ objectFit: 'cover' }}
+          />
         </div>
       )}
-      <div className={`score ${sc}`}>{item.report.score}%</div>
-      <h3>Decision: {item.report.decision}</h3>
-      <ul className="report-list">
-        <li>Style match: {item.report.styleMatch}%</li>
-        <li>Wardrobe impact: {item.report.wardrobeImpact}%</li>
-        <li>Budget fit: {item.report.budgetFit}%</li>
-        <li>Similar owned items: {item.report.duplicateCount}</li>
-        <li>Why: {explanationAgent.explainInspiration(item.report)}</li>
-      </ul>
-      <div className="top-actions" style={{ marginTop: 14 }}>
+
+      {/* Decision + score header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div className={`score ${sc}`} style={{ flexShrink: 0 }}>{score}%</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: decisionColor }}>{r.decision}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            Confidence {r.confidence ?? 75}%
+            {r._meta?.fallbackUsed && (
+              <span style={{ marginLeft: 6, color: '#cc8800' }}>· mock fallback</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Reasoning summary */}
+      {r.reasoningSummary && (
+        <p style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+          {r.reasoningSummary}
+        </p>
+      )}
+
+      {/* Score breakdown */}
+      <p className="eyebrow" style={{ marginBottom: 6 }}>Score Breakdown</p>
+      <ScoreBar label="Style Match" value={r.styleMatchScore ?? (r as unknown as { styleMatch?: number }).styleMatch ?? 0} />
+      <ScoreBar label="Wardrobe Impact" value={r.wardrobeImpactScore ?? (r as unknown as { wardrobeImpact?: number }).wardrobeImpact ?? 0} />
+      <ScoreBar label="Budget Fit" value={r.budgetFitScore ?? (r as unknown as { budgetFit?: number }).budgetFit ?? 0} />
+      <ScoreBar label="Uniqueness" value={100 - (r.duplicateRisk ?? (r as unknown as { duplicateCount?: number }).duplicateCount ?? 0)} />
+
+      {/* Why it works */}
+      {r.whyItWorks && (
+        <div style={{ marginTop: 12 }}>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>Why It Works</p>
+          <p style={{ fontSize: 13, lineHeight: 1.5 }}>{r.whyItWorks}</p>
+        </div>
+      )}
+
+      {/* Qualitative sections */}
+      <Section title="Risks" items={r.risks ?? []} />
+      <Section title="Outfit Ideas" items={r.suggestedOutfits ?? []} />
+      <Section title="Better Alternatives" items={r.betterAlternatives ?? []} />
+      <Section title="Missing Pieces" items={r.missingWardrobeOpportunities ?? []} />
+
+      {/* Actions */}
+      <div className="top-actions" style={{ marginTop: 16 }}>
         <button className="primary" onClick={handleOrder}>Order Mock</button>
         <button className="secondary" onClick={handleSaveToWardrobe}>Add to Wardrobe</button>
       </div>
+
+      <DebugMeta meta={r._meta} />
     </>
   );
 }
 
+// ── Main view ────────────────────────────────────────────────────────────────
+
 export default function InspirationView() {
-  const { state, dispatch } = useAura();
+  const { state, dispatch, uploadImage } = useAura();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  // Track the result of the current submission independently of global store history
+  const [currentResult, setCurrentResult] = useState<InspirationItem | null>(null);
+  // Name being typed — used to clear stale result when the user changes the item
+  const [draftName, setDraftName] = useState('');
 
-  const lastInspiration = state.inspirations.at(-1);
+  function clearResult() {
+    setCurrentResult(null);
+    setAiError('');
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
-    const form = new FormData(e.currentTarget);
-    const imageFile = form.get('image') as File | null;
-    const image = await fileToDataURL(imageFile);
+    setAiError('');
 
-    const input = {
-      name: form.get('name') as string,
+    const form = new FormData(e.currentTarget);
+    const name = (form.get('name') as string).trim();
+    const price = Number(form.get('price'));
+
+    // Client-side validation — mirrors server validation for instant feedback
+    if (!isValidItemName(name)) {
+      setAiError('Please enter a real item name, like "Camel suede jacket" or "Navy blazer".');
+      return;
+    }
+    if (!price || price < 1) {
+      setAiError('Please enter the item\'s price (minimum $1) for an accurate analysis.');
+      return;
+    }
+
+    // Clear any previous result immediately so it can't be shown during the new fetch
+    setCurrentResult(null);
+    setLoading(true);
+
+    const imageFile = form.get('image') as File | null;
+
+    let image = '';
+    if (imageFile && imageFile.size > 0) {
+      const uploaded = await uploadImage(imageFile, 'inspiration-images');
+      image = uploaded ?? await fileToDataURL(imageFile);
+    }
+
+    // Capture the exact submitted values — the report must match these
+    const submittedItem = {
+      name,
       category: form.get('category') as string,
       color: (form.get('color') as string) || 'Neutral',
       style: (form.get('style') as string) || state.user.styleGoal,
-      price: Number(form.get('price') || 0),
+      price,
     };
 
     try {
-      const report = await inspirationAgent.analyze(input, {
-        wardrobe: state.wardrobe,
-        user: state.user,
+      const res = await fetch('/api/ai/analyze-inspiration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item: submittedItem, context: { wardrobe: state.wardrobe, user: state.user, styleDNA: state.styleDNA ? {
+          preferredColors: state.styleDNA.preferredColors.slice(0, 5).map(e => e.value),
+          preferredStyleTags: state.styleDNA.preferredStyleTags.slice(0, 5).map(e => e.value),
+          avoidedStyleTags: state.styleDNA.avoidedStyleTags.slice(0, 3).map(e => e.value),
+          preferredOccasions: state.styleDNA.preferredOccasions.slice(0, 3).map(e => e.value),
+          wardrobeGaps: state.styleDNA.wardrobeGaps,
+          confidenceScore: state.styleDNA.confidenceScore,
+        } : undefined } }),
       });
-      dispatch({
-        type: 'ADD_INSPIRATION',
-        payload: { id: uid(), ...input, image, report, createdAt: new Date().toISOString() },
-      });
-      toast('AURA analysis complete.');
+
+      const data = (await res.json()) as { report?: InspirationReport; error?: string };
+
+      if (!res.ok || !data.report) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+
+      // Build the inspiration item using the submitted values as source of truth for name/category/color/style
+      const inspirationItem: InspirationItem = {
+        id: uid(),
+        ...submittedItem,
+        image,
+        report: data.report,
+        createdAt: new Date().toISOString(),
+      };
+
+      dispatch({ type: 'ADD_INSPIRATION', payload: inspirationItem });
+      // Show this exact item — not state.inspirations.at(-1) which could race
+      setCurrentResult(inspirationItem);
+      toast(data.report._meta?.fallbackUsed ? 'Analysis complete (mock fallback used).' : 'AURA analysis complete.');
     } catch (err) {
-      toast(`Analysis failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setAiError(`Analysis failed: ${msg}`);
+      toast(`Analysis failed: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -114,37 +273,75 @@ export default function InspirationView() {
 
   return (
     <div className="grid two">
+      {/* Left: form */}
       <div className="card">
         <p className="eyebrow">AI Inspiration</p>
         <h2>I found this. Should I buy it?</h2>
         <form className="form" onSubmit={handleSubmit}>
-          <label>Item name <input name="name" required placeholder="Camel suede jacket" /></label>
+          <label>
+            Item name
+            <input
+              name="name"
+              required
+              placeholder="Camel suede jacket"
+              value={draftName}
+              onChange={e => {
+                setDraftName(e.target.value);
+                // Clear stale report whenever the item name changes
+                if (currentResult) clearResult();
+              }}
+            />
+          </label>
           <label>Category
-            <select name="category">
+            <select name="category" onChange={() => currentResult && clearResult()}>
               <option>Outerwear</option><option>Top</option><option>Bottom</option>
               <option>Shoes</option><option>Accessory</option><option>Watch</option><option>Fragrance</option>
             </select>
           </label>
           <label>Color <input name="color" placeholder="Camel" /></label>
           <label>Style <input name="style" placeholder="Quiet Luxury" /></label>
-          <label>Estimated price <input name="price" type="number" min="0" placeholder="320" /></label>
+          <label>
+            Estimated price
+            <input
+              name="price"
+              type="number"
+              min="1"
+              required
+              placeholder="320"
+              onChange={() => currentResult && clearResult()}
+            />
+          </label>
           <label>Upload inspiration image <input name="image" type="file" accept="image/*" /></label>
+          {aiError && (
+            <p style={{ color: '#c0392b', fontSize: 13, background: '#fdf2f2', padding: '8px 12px', borderRadius: 8 }}>
+              {aiError}
+            </p>
+          )}
           <button className="primary" type="submit" disabled={loading}>
             {loading ? 'Analyzing…' : 'Analyze Compatibility'}
           </button>
         </form>
       </div>
 
-      <div className="card">
-        {lastInspiration
-          ? <InspirationReport item={lastInspiration} />
-          : (
-            <>
-              <p className="eyebrow">Decision Engine</p>
-              <h2>No inspiration analyzed yet.</h2>
-              <p>Upload a clothing item, screenshot, or outfit idea. AURA will return a compatibility score, wardrobe impact, and Buy / Wait / Skip guidance.</p>
-            </>
-          )}
+      {/* Right: report — strictly tied to the current submission */}
+      <div className="card" style={{ overflowY: 'auto', maxHeight: '85vh' }}>
+        {loading ? (
+          <>
+            <p className="eyebrow">Compatibility Report</p>
+            <h2>{draftName || 'Analyzing…'}</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>
+              AURA is analyzing this item against your wardrobe and style profile…
+            </p>
+          </>
+        ) : currentResult ? (
+          <InspirationReportCard item={currentResult} />
+        ) : (
+          <>
+            <p className="eyebrow">Decision Engine</p>
+            <h2>No inspiration analyzed yet.</h2>
+            <p>Upload a clothing item, screenshot, or outfit idea. AURA will return a compatibility score, wardrobe impact, and Buy / Wait / Skip guidance.</p>
+          </>
+        )}
       </div>
     </div>
   );
