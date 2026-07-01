@@ -456,6 +456,7 @@ export interface AppState {
   occasionEvents: OccasionEvent[];
   shoppingProducts: ShoppingProduct[];
   shoppingRecommendations: ShoppingRecommendation[];
+  outfitPlans: OutfitPlan[];
 }
 
 export type View =
@@ -465,6 +466,64 @@ export type View =
   | 'shopping'
   | 'packing'
   | 'occasions'
+  | 'planner'
   | 'stylist'
   | 'analytics'
   | 'settings';
+
+// ── Outfit Planner / Smart Closet Calendar (v1.3) ─────────────────────────
+
+export type PlannerStatus = 'planned' | 'worn' | 'skipped' | 'changed';
+export type PlannerSource = 'planner' | 'manual' | 'occasion' | 'trip' | 'daily';
+
+export interface PlannerRecommendation {
+  outfitItems: WardrobeItem[];
+  score: number;
+  reason: string;
+  warnings: string[];
+  missingCategories: string[];
+  aiEnhanced?: boolean;
+}
+
+export interface OutfitPlan {
+  id: string;
+  userId: string;
+  planDate: string;
+  occasionEventId?: string;
+  tripPlanId?: string;
+  outfitItems: WardrobeItem[];
+  recommendation: PlannerRecommendation;
+  status: PlannerStatus;
+  source: PlannerSource;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlannerDayWeather {
+  tempHigh?: number;
+  tempLow?: number;
+  condition?: string;
+  icon?: string;
+}
+
+export interface PlannerDay {
+  date: string;
+  dayLabel: string;
+  weather?: PlannerDayWeather;
+  occasionEvents: OccasionEvent[];
+  tripPlans: TripPlan[];
+  plannedOutfit?: OutfitPlan;
+  suggestedOutfit?: PlannerRecommendation;
+  wardrobeWarnings: string[];
+  repeatWarnings: string[];
+  missingItems: string[];
+}
+
+export interface PlannerWeek {
+  weekStart: string;
+  days: PlannerDay[];
+  globalWarnings: string[];
+  generatedAt: string;
+  aiEnhanced: boolean;
+}

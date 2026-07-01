@@ -310,6 +310,10 @@ export default function HomeView({ onNavigate }: { onNavigate?: (view: View) => 
   const hasStyleDNA = !!state.styleDNA && state.styleDNA.confidenceScore > 0;
   const hasTripPlan = (state.tripPlans ?? []).length > 0;
   const hasOccasionEvent = (state.occasionEvents ?? []).length > 0;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayPlan = (state.outfitPlans ?? []).find(p => p.planDate === todayStr);
+
   const checklistItems = [
     { label: 'Add your first wardrobe item', done: hasWardrobeItem },
     { label: 'Analyze an item with Vision AI', done: hasVisionItem },
@@ -615,6 +619,38 @@ export default function HomeView({ onNavigate }: { onNavigate?: (view: View) => 
           </p>
         </div>
       )}
+
+      {/* Today's Planned Outfit (v1.3 Planner) */}
+      <div className="card" style={{ marginTop: 18, padding: '1.25rem 1.5rem' }}>
+        <p className="eyebrow" style={{ marginBottom: 4 }}>Today&apos;s Planned Outfit</p>
+        {todayPlan ? (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {todayPlan.outfitItems.map(item => (
+                <span key={item.id} className="pill">{item.name}</span>
+              ))}
+            </div>
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+              background: todayPlan.status === 'worn' ? '#16a34a20' : '#2563eb20',
+              color: todayPlan.status === 'worn' ? '#16a34a' : '#2563eb',
+              textTransform: 'uppercase', marginRight: 8,
+            }}>{todayPlan.status}</span>
+            {onNavigate && (
+              <button className="secondary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => onNavigate('planner')}>
+                Open Planner
+              </button>
+            )}
+          </>
+        ) : (
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>No outfit planned for today.</p>
+        )}
+        {!todayPlan && onNavigate && (
+          <button className="secondary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => onNavigate('planner')}>
+            Generate this week
+          </button>
+        )}
+      </div>
 
       {/* Demo Journey card — visible only in demo mode */}
       {process.env.NEXT_PUBLIC_ENABLE_DEMO_TOOLS === 'true' && (

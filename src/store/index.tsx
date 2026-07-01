@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import type { AppState, FeedbackEvent, InspirationItem, OccasionEvent, Order, SavedOutfit, ShoppingProduct, ShoppingRecommendation, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
+import type { AppState, FeedbackEvent, InspirationItem, OccasionEvent, Order, OutfitPlan, SavedOutfit, ShoppingProduct, ShoppingRecommendation, StyleDNAProfile, StylistBooking, TripPlan, UserProfile, WardrobeItem } from '@/lib/types';
 import { defaultState } from './default';
 import { useAuth } from './auth';
 import { useToast } from './toast';
@@ -35,6 +35,9 @@ type Action =
   | { type: 'DELETE_SHOPPING_PRODUCT'; id: string }
   | { type: 'SET_SHOPPING_RECOMMENDATIONS'; payload: ShoppingRecommendation[] }
   | { type: 'ADD_SHOPPING_RECOMMENDATION'; payload: ShoppingRecommendation }
+  | { type: 'SET_OUTFIT_PLANS'; payload: OutfitPlan[] }
+  | { type: 'UPSERT_OUTFIT_PLAN'; payload: OutfitPlan }
+  | { type: 'DELETE_OUTFIT_PLAN'; planDate: string }
   | { type: 'RESET' };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -106,6 +109,12 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, shoppingRecommendations: action.payload };
     case 'ADD_SHOPPING_RECOMMENDATION':
       return { ...state, shoppingRecommendations: [action.payload, ...(state.shoppingRecommendations ?? []).filter(r => r.id !== action.payload.id)] };
+    case 'SET_OUTFIT_PLANS':
+      return { ...state, outfitPlans: action.payload };
+    case 'UPSERT_OUTFIT_PLAN':
+      return { ...state, outfitPlans: [action.payload, ...(state.outfitPlans ?? []).filter(p => p.planDate !== action.payload.planDate)] };
+    case 'DELETE_OUTFIT_PLAN':
+      return { ...state, outfitPlans: (state.outfitPlans ?? []).filter(p => p.planDate !== action.planDate) };
     case 'RESET':
       return defaultState();
     default:

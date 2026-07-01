@@ -1,4 +1,4 @@
-import type {
+import type { OutfitPlan,
   AppState,
   FeedbackEvent,
   InspirationItem,
@@ -41,6 +41,10 @@ export interface IRepository {
   deleteShoppingProduct(id: string): Promise<void>;
   getShoppingRecommendations(): Promise<ShoppingRecommendation[]>;
   saveShoppingRecommendation(rec: ShoppingRecommendation): Promise<void>;
+  getOutfitPlans(): Promise<OutfitPlan[]>;
+  saveOutfitPlan(plan: Omit<OutfitPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<OutfitPlan>;
+  updateOutfitPlan(planDate: string, updates: Partial<OutfitPlan>): Promise<OutfitPlan>;
+  deleteOutfitPlan(planDate: string): Promise<void>;
   reset(): Promise<void>;
   uploadImage(
     file: File,

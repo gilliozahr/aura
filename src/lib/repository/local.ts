@@ -14,6 +14,7 @@ import type {
   WardrobeItem,
 } from '@/lib/types';
 import { defaultState } from '@/store/default';
+import type { OutfitPlan } from '@/lib/types';
 import type { IRepository } from './index';
 
 const STORE_KEY = 'aura.v0.2.state';
@@ -172,6 +173,32 @@ export class LocalRepository implements IRepository {
 
   async reset(): Promise<void> {
     if (typeof window !== 'undefined') localStorage.removeItem(STORE_KEY);
+  }
+
+  async getOutfitPlans(): Promise<OutfitPlan[]> {
+    return this.read().outfitPlans ?? [];
+  }
+
+  async saveOutfitPlan(plan: Omit<OutfitPlan, 'id' | 'createdAt' | 'updatedAt'>): Promise<OutfitPlan> {
+    const now = new Date().toISOString();
+    const full: OutfitPlan = { ...plan, id: `local-${Date.now()}`, createdAt: now, updatedAt: now };
+    const s = this.read();
+    this.write({ ...s, outfitPlans: [full, ...(s.outfitPlans ?? []).filter(p => p.planDate !== plan.planDate)] });
+    return full;
+  }
+
+  async updateOutfitPlan(planDate: string, updates: Partial<OutfitPlan>): Promise<OutfitPlan> {
+    const s = this.read();
+    const existing = (s.outfitPlans ?? []).find(p => p.planDate === planDate);
+    if (!existing) throw new Error(`No plan for ${planDate}`);
+    const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    this.write({ ...s, outfitPlans: (s.outfitPlans ?? []).map(p => p.planDate === planDate ? updated : p) });
+    return updated;
+  }
+
+  async deleteOutfitPlan(planDate: string): Promise<void> {
+    const s = this.read();
+    this.write({ ...s, outfitPlans: (s.outfitPlans ?? []).filter(p => p.planDate !== planDate) });
   }
 
   async uploadImage(

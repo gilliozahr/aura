@@ -201,5 +201,6 @@ export function defaultState(): AppState {
     occasionEvents: [],
     shoppingProducts: [],
     shoppingRecommendations: [],
+    outfitPlans: [],
   };
 }
