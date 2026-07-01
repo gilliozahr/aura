@@ -530,24 +530,40 @@ export default function HomeView({ onNavigate }: { onNavigate?: (view: View) => 
         </div>
       </div>
 
-      {/* Upcoming occasions strip */}
+      {/* Upcoming occasions strip — today, tomorrow, or Critical/High within 7 days */}
       {(() => {
         const today = new Date().toISOString().slice(0, 10);
         const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-        const upcoming = (state.occasionEvents ?? []).filter(e => e.date === today || e.date === tomorrow);
+        const week = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+        const upcoming = (state.occasionEvents ?? [])
+          .filter(e =>
+            e.date >= today && (
+              e.date <= tomorrow ||
+              (e.date <= week && (e.importance === 'Critical' || e.importance === 'High'))
+            )
+          )
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(0, 3);
         if (upcoming.length === 0) return null;
         return (
           <div style={{ marginTop: 18 }}>
             {upcoming.map(e => {
               const isToday = e.date === today;
+              const isTomorrow = e.date === tomorrow;
+              const daysAway = Math.round((new Date(e.date).getTime() - new Date(today).getTime()) / 86_400_000);
+              const whenLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : `In ${daysAway} days`;
               const needsOutfit = e.outfitStatus === 'pending' || e.outfitStatus === 'rejected';
+              const importanceColor = e.importance === 'Critical' ? '#c03030' : e.importance === 'High' ? '#c07000' : undefined;
               return (
                 <div key={e.id} className="card" style={{ padding: '0.85rem 1.25rem', marginBottom: 8, borderLeft: `3px solid ${needsOutfit ? '#b07030' : '#3a7a4a'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div>
-                      <p className="eyebrow" style={{ margin: 0, marginBottom: 2 }}>{isToday ? 'Today' : 'Tomorrow'} · {e.eventType}</p>
+                      <p className="eyebrow" style={{ margin: 0, marginBottom: 2 }}>{whenLabel} · {e.eventType}</p>
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{e.title}</span>
-                      <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>{e.formality}</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>{e.dressCode ?? e.formality}</span>
+                      {importanceColor && (
+                        <span style={{ fontSize: 11, color: importanceColor, fontWeight: 600, marginLeft: 8 }}>{e.importance}</span>
+                      )}
                     </div>
                     {needsOutfit && (
                       <span style={{ fontSize: 12, color: '#b07030', fontWeight: 600, whiteSpace: 'nowrap' }}>

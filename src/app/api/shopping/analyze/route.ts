@@ -146,6 +146,8 @@ export async function POST(req: Request) {
     eventType: r.event_type as OccasionEvent['eventType'],
     date: r.event_date as string,
     formality: r.formality as OccasionEvent['formality'],
+    dressCode: (r.dress_code as OccasionEvent['dressCode']) ?? undefined,
+    importance: (r.importance as OccasionEvent['importance']) ?? 'Normal',
     outfitStatus: (r.outfit_status as OccasionEvent['outfitStatus']) ?? 'pending',
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,

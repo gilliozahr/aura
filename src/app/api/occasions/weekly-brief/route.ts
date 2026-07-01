@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAuraServerClient } from '@/lib/supabase/server';
 import { buildWeeklyOccasionBrief } from '@/lib/occasions/engine';
-import type { OccasionEvent, OccasionFormality, OccasionOutfitRecommendation, OccasionType, TravelWeather } from '@/lib/types';
+import type { DressCode, OccasionEvent, OccasionFormality, OccasionImportance, OccasionOutfitRecommendation, OccasionType, TravelWeather } from '@/lib/types';
 
 interface OccasionEventRow {
   id: string;
@@ -16,6 +16,8 @@ interface OccasionEventRow {
   longitude: number | null;
   country_code: string | null;
   formality: string;
+  dress_code: string | null;
+  importance: string;
   notes: string | null;
   weather_context: Record<string, unknown> | null;
   recommended_outfit: OccasionOutfitRecommendation | null;
@@ -44,6 +46,8 @@ function rowToEvent(r: OccasionEventRow): OccasionEvent {
     longitude: r.longitude ?? undefined,
     countryCode: r.country_code ?? undefined,
     formality: r.formality as OccasionFormality,
+    dressCode: (r.dress_code as DressCode | null) ?? undefined,
+    importance: (r.importance as OccasionImportance) ?? 'Normal',
     notes: r.notes ?? undefined,
     weatherContext,
     recommendedOutfit: r.recommended_outfit ?? undefined,

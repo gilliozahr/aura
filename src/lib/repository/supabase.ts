@@ -9,8 +9,10 @@ import type {
   InspirationReport,
   OccasionEvent,
   OccasionFormality,
+  OccasionImportance,
   OccasionOutfitRecommendation,
   OccasionType,
+  DressCode,
   Order,
   OutfitReport,
   SavedOutfit,
@@ -106,6 +108,8 @@ interface OccasionEventRow {
   longitude: number | null;
   country_code: string | null;
   formality: string;
+  dress_code: string | null;
+  importance: string;
   notes: string | null;
   weather_context: Record<string, unknown> | null;
   recommended_outfit: OccasionOutfitRecommendation | null;
@@ -133,6 +137,8 @@ function rowToOccasionEvent(r: OccasionEventRow): OccasionEvent {
     longitude: r.longitude ?? undefined,
     countryCode: r.country_code ?? undefined,
     formality: r.formality as OccasionFormality,
+    dressCode: (r.dress_code as DressCode | null) ?? undefined,
+    importance: (r.importance as OccasionImportance) ?? 'Normal',
     notes: r.notes ?? undefined,
     weatherContext,
     recommendedOutfit: r.recommended_outfit ?? undefined,
@@ -694,6 +700,8 @@ export class SupabaseRepository implements IRepository {
       longitude: event.longitude ?? null,
       country_code: event.countryCode ?? null,
       formality: event.formality,
+      dress_code: event.dressCode ?? null,
+      importance: event.importance,
       notes: event.notes ?? null,
       weather_context: event.weatherContext ?? {},
       recommended_outfit: event.recommendedOutfit ?? null,
@@ -717,6 +725,8 @@ export class SupabaseRepository implements IRepository {
     if (updates.longitude !== undefined) row.longitude = updates.longitude;
     if (updates.countryCode !== undefined) row.country_code = updates.countryCode;
     if (updates.formality !== undefined) row.formality = updates.formality;
+    if (updates.dressCode !== undefined) row.dress_code = updates.dressCode ?? null;
+    if (updates.importance !== undefined) row.importance = updates.importance;
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.weatherContext !== undefined) row.weather_context = updates.weatherContext;
     if (updates.recommendedOutfit !== undefined) row.recommended_outfit = updates.recommendedOutfit;

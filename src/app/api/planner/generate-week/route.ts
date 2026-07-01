@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuraServerClient } from '@/lib/supabase/server';
 import { generatePlannerWeek } from '@/lib/planner/engine';
 import type {
+  DressCode,
+  OccasionImportance,
   WardrobeItem,
   StyleDNAProfile,
   SavedOutfit,
@@ -168,6 +170,8 @@ export async function POST(request: NextRequest) {
       city: (r.city as string | null) ?? undefined,
       country: (r.country as string | null) ?? undefined,
       formality: r.formality as OccasionFormality,
+      dressCode: (r.dress_code as DressCode | null) ?? undefined,
+      importance: (r.importance as OccasionImportance) ?? 'Normal',
       notes: (r.notes as string | null) ?? undefined,
       outfitStatus: (r.outfit_status as OccasionEvent['outfitStatus']) ?? 'pending',
       createdAt: r.created_at as string,

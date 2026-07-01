@@ -5,8 +5,10 @@ import { useAura } from '@/store';
 import { useToast } from '@/store/toast';
 import { uid } from '@/lib/utils';
 import type {
+  DressCode,
   OccasionEvent,
   OccasionFormality,
+  OccasionImportance,
   OccasionOutfitRecommendation,
   OccasionType,
   TravelWeather,
@@ -22,6 +24,13 @@ const EVENT_TYPES: OccasionType[] = [
 const FORMALITY_OPTIONS: OccasionFormality[] = [
   'Casual', 'Smart Casual', 'Business', 'Cocktail', 'Formal', 'Black Tie',
 ];
+
+const DRESS_CODE_OPTIONS: DressCode[] = [
+  'Casual', 'Smart Casual', 'Business Casual', 'Business Formal',
+  'Cocktail', 'Black Tie', 'White Tie', 'Theme',
+];
+
+const IMPORTANCE_OPTIONS: OccasionImportance[] = ['Low', 'Normal', 'High', 'Critical'];
 
 const COUNTRIES = [
   'Australia', 'Austria', 'Bahrain', 'Belgium', 'Brazil', 'Bulgaria',
@@ -201,6 +210,19 @@ function EventCard({
               padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
               background: 'rgba(180,160,120,0.12)', color: 'var(--accent)',
             }}>{event.formality}</span>
+            {event.dressCode && (
+              <span style={{
+                padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                background: 'rgba(100,100,200,0.1)', color: '#4060c0',
+              }}>{event.dressCode}</span>
+            )}
+            {event.importance && event.importance !== 'Normal' && (
+              <span style={{
+                padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                background: event.importance === 'Critical' ? 'rgba(200,50,50,0.1)' : event.importance === 'High' ? 'rgba(200,120,0,0.1)' : 'rgba(150,150,150,0.1)',
+                color: event.importance === 'Critical' ? '#c03030' : event.importance === 'High' ? '#c07000' : 'var(--muted)',
+              }}>{event.importance}</span>
+            )}
             <span style={{ fontSize: 11, color: statusColor, fontWeight: 600 }}>{statusText}</span>
           </div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
@@ -289,6 +311,8 @@ interface FormState {
   city: string;
   country: string;
   formality: OccasionFormality;
+  dressCode: DressCode | '';
+  importance: OccasionImportance;
   notes: string;
 }
 
@@ -301,6 +325,8 @@ const EMPTY_FORM: FormState = {
   city: '',
   country: '',
   formality: 'Smart Casual',
+  dressCode: '',
+  importance: 'Normal',
   notes: '',
 };
 
@@ -372,6 +398,8 @@ export default function OccasionsView() {
         longitude: detectedCoordsRef.current.lon,
         countryCode: detectedCoordsRef.current.countryCode,
         formality: form.formality,
+        dressCode: form.dressCode || undefined,
+        importance: form.importance,
         notes: form.notes || undefined,
         outfitStatus: 'pending',
         createdAt: new Date().toISOString(),
@@ -511,6 +539,19 @@ export default function OccasionsView() {
                 <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Formality</label>
                 <select value={form.formality} onChange={e => setForm(f => ({ ...f, formality: e.target.value as OccasionFormality }))} style={{ width: '100%' }}>
                   {FORMALITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Dress Code</label>
+                <select value={form.dressCode} onChange={e => setForm(f => ({ ...f, dressCode: e.target.value as DressCode | '' }))} style={{ width: '100%' }}>
+                  <option value="">Not specified</option>
+                  {DRESS_CODE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Importance</label>
+                <select value={form.importance} onChange={e => setForm(f => ({ ...f, importance: e.target.value as OccasionImportance }))} style={{ width: '100%' }}>
+                  {IMPORTANCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>

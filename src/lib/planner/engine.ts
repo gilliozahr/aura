@@ -95,6 +95,9 @@ function generateSuggestion(
   }
 
   const isFormal = occasionEvents.some(e => isFormalOccasion(e.formality));
+  const hasCriticalEvent = occasionEvents.some(e => e.importance === 'Critical' || e.importance === 'High');
+  const dressCode = occasionEvents.find(e => e.dressCode)?.dressCode;
+  const isBlackTie = dressCode === 'Black Tie' || dressCode === 'White Tie';
   const isCold = weather?.tempHigh !== undefined && weather.tempHigh < 10;
 
   const sortedWardrobe = [...wardrobe].sort((a, b) => {
@@ -148,6 +151,8 @@ function generateSuggestion(
   if (!hasShoe) missing.push('shoes');
 
   if (isFormal && outfitItems.some(isFormalItem)) score += 20;
+  if (isBlackTie && outfitItems.every(isFormalItem)) score += 10;
+  if (hasCriticalEvent && outfitItems.some(isFormalItem)) score += 5;
   if (isCold && outfitItems.some(isOuterwear)) score += 15;
 
   if (styleDNA && styleDNA.preferredStyleTags.length > 0) {
@@ -165,7 +170,10 @@ function generateSuggestion(
   const occasionLabel = occasionEvents[0]?.title || (isFormal ? 'formal occasion' : 'daily wear');
   let reason = `Curated for ${occasionLabel}.`;
   if (isCold) reason += ' Warm layering included for cold weather.';
-  if (isFormal) reason += ' Formal-appropriate items prioritised.';
+  if (isBlackTie) reason += ' Black tie dress code applied.';
+  else if (dressCode) reason += ` ${dressCode} dress code applied.`;
+  else if (isFormal) reason += ' Formal-appropriate items prioritised.';
+  if (hasCriticalEvent) reason += ' High-importance event — best items selected.';
 
   return {
     outfitItems,

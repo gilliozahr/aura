@@ -323,6 +323,18 @@ export type OccasionFormality =
   | 'Formal'
   | 'Black Tie';
 
+export type DressCode =
+  | 'Smart Casual'
+  | 'Business Casual'
+  | 'Business Formal'
+  | 'Cocktail'
+  | 'Black Tie'
+  | 'White Tie'
+  | 'Casual'
+  | 'Theme';
+
+export type OccasionImportance = 'Low' | 'Normal' | 'High' | 'Critical';
+
 export interface OccasionOutfitRecommendation {
   items: string[];
   outfitScore: number;
@@ -349,6 +361,8 @@ export interface OccasionEvent {
   longitude?: number;
   countryCode?: string;
   formality: OccasionFormality;
+  dressCode?: DressCode;
+  importance: OccasionImportance;
   notes?: string;
   weatherContext?: TravelWeather;
   recommendedOutfit?: OccasionOutfitRecommendation;
