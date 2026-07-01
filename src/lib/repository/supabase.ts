@@ -185,6 +185,7 @@ export class SupabaseRepository implements IRepository {
     if (inspirationsRes.error) console.error('[SupabaseRepository] loadState/inspirations:', inspirationsRes.error.message);
     if (ordersRes.error) console.error('[SupabaseRepository] loadState/orders:', ordersRes.error.message);
     if (outfitsRes.error) console.error('[SupabaseRepository] loadState/outfits:', outfitsRes.error.message);
+    if (occasionEventsRes.error) console.error('[SupabaseRepository] loadState/occasionEvents:', occasionEventsRes.error.message);
 
     const def = defaultState();
 
@@ -685,8 +686,9 @@ export class SupabaseRepository implements IRepository {
 
   async saveOccasionEvent(event: OccasionEvent): Promise<void> {
     const uid = await this.userId();
-    if (!uid) return;
-    const { error } = await this.client.from('occasion_events').insert({
+    if (!uid) throw new Error('Not authenticated — occasion not saved');
+    const now = new Date().toISOString();
+    const { error } = await this.client.from('occasion_events').upsert({
       id: event.id,
       user_id: uid,
       title: event.title,
@@ -703,16 +705,17 @@ export class SupabaseRepository implements IRepository {
       dress_code: event.dressCode ?? null,
       importance: event.importance,
       notes: event.notes ?? null,
-      weather_context: event.weatherContext ?? {},
+      weather_context: event.weatherContext ?? null,
       recommended_outfit: event.recommendedOutfit ?? null,
       outfit_status: event.outfitStatus,
-    });
+      updated_at: now,
+    }, { onConflict: 'id' });
     this.assertNoError(error, 'saveOccasionEvent');
   }
 
   async updateOccasionEvent(id: string, updates: Partial<OccasionEvent>): Promise<void> {
     const uid = await this.userId();
-    if (!uid) return;
+    if (!uid) throw new Error('Not authenticated — occasion update not saved');
     const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (updates.title !== undefined) row.title = updates.title;
     if (updates.eventType !== undefined) row.event_type = updates.eventType;
@@ -741,7 +744,7 @@ export class SupabaseRepository implements IRepository {
 
   async deleteOccasionEvent(id: string): Promise<void> {
     const uid = await this.userId();
-    if (!uid) return;
+    if (!uid) throw new Error('Not authenticated — occasion delete not saved');
     const { error } = await this.client
       .from('occasion_events')
       .delete()
