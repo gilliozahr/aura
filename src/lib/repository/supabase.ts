@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 import type { AppState, OutfitPlan, WardrobeItem } from '@/lib/types';
 import { defaultState } from '@/store/default';
 import type { IRepository } from './index';
@@ -7,7 +7,7 @@ export class SupabaseRepository implements IRepository {
   private client;
 
   constructor(url: string, anonKey: string) {
-    this.client = createClient(url, anonKey);
+    this.client = createBrowserClient(url, anonKey);
   }
 
   private assertNoError(error: { message: string } | null, context: string): void {
